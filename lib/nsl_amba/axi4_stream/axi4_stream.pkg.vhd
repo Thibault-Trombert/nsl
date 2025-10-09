@@ -654,6 +654,7 @@ package axi4_stream is
                                signal clock: in std_ulogic;
                                signal stream_i: in slave_t;
                                signal stream_o: out master_t;
+                               timeout : in time := 100 us;
                                dt : in time := 10 ns);
 
   -- Waits for a queue to be empty
@@ -2030,6 +2031,7 @@ package body axi4_stream is
                                signal clock: in std_ulogic;
                                signal stream_i: in slave_t;
                                signal stream_o: out master_t;
+                               timeout : in time := 100 us;
                                dt : in time := 10 ns)
   is
     variable frm: frame_t;
@@ -2037,7 +2039,7 @@ package body axi4_stream is
     stream_o <= transfer_defaults(cfg);
 
     loop
-      frame_queue_get(root, frm, dt);
+      frame_queue_get(root, frm, dt, timeout);
       wait until falling_edge(clock);
       frame_put(cfg, clock, stream_i, stream_o, frm);
     end loop;
