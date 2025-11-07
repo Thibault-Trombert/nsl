@@ -196,11 +196,12 @@ package usb is
   constant FEATURE_SELECTOR_TEST_MODE            : feature_selector_t := "00000010";
 
   -- 5.8.3: The USB defines the allowable maximum bulk data payload
-  -- sizes to be only 8, 16, 32, or 64 bytes for full-speed endpoints
-  -- and 512 bytes for high-speed endpoints.
+  -- sizes to be only 8, 16, 32, or 64 bytes for full-speed, 512 bytes
+  -- for high-speed, and 1k for superspeed endpoints.
   constant BULK_MPS_FS_MIN: integer := 8;
   constant BULK_MPS_FS_MAX: integer := 64;
   constant BULK_MPS_HS: integer := 512;
+  constant BULK_MPS_SS: integer := 1024;
 
   function bit_count_cycles_fs(bit_count : integer; ref_clock_mhz : integer := 60) return integer;
   function bit_count_cycles_hs(bit_count : integer; ref_clock_mhz : integer := 60) return integer;
