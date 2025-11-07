@@ -55,7 +55,7 @@ begin
                       src => in_i);
     in_o <= out_i;
 
-    assert in_config_c.has_keep = out_config_c.has_keep
+    assert in_config_c.data_width = 1 or in_config_c.has_keep = out_config_c.has_keep
       report "In/out keep do not match"
       severity failure;
 
