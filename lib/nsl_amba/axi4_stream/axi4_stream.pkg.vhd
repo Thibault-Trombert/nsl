@@ -50,6 +50,8 @@ package axi4_stream is
     has_ready: boolean;
     has_last: boolean;
   end record;
+  
+  type config_vector is array (natural range <>) of config_t;
 
   -- Configuration parameters factory with sensible defaults
   function config(
