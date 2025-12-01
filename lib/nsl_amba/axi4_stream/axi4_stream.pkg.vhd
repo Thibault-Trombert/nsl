@@ -727,6 +727,12 @@ package axi4_stream is
   procedure frame_queue_assert_equal(constant cfg: config_t;
                                      variable a, b: in frame_queue_root_t;
                                      sev: severity_level := failure);
+
+  procedure frame_queue_pop(variable root : inout frame_queue_root_t);
+  -- Delete frame at index "index" in queue "root"
+  procedure frame_queue_delete(variable root  : inout frame_queue_root_t;
+                               variable frm : out frame_t;
+                               constant index : in integer);
   
   function shift_left(cfg : config_t;
                       s: master_vector) return master_vector;
@@ -2205,7 +2211,7 @@ package body axi4_stream is
   procedure frame_queue_assert_equal(constant cfg: config_t;
                                      variable a, b: in frame_queue_root_t;
                                      sev: severity_level := failure) 
- is
+  is
     variable a_frm, b_frm: frame_t;
     variable data_ok, user_ok, id_ok, dest_ok: boolean;
     variable count: integer := 0;
@@ -2242,6 +2248,104 @@ package body axi4_stream is
     assert b.head = null
       report "Left queue is shorter than right one, after "&to_string(count)&" frames"
       severity sev;
+  end procedure;
+
+  procedure frame_queue_pop(
+    variable root : inout frame_queue_root_t)
+  is
+    variable curr : frame_queue_t;
+    variable prev : frame_queue_t := null;
+  begin
+    -- Queue empty
+    if root.head = null then
+      return;
+    end if;
+    
+    curr := root.head;
+    
+    -- Queue has only 1 element
+    if curr.chain = null then
+      if curr.frame.data /= null then
+        deallocate(curr.frame.data);
+      end if;
+      deallocate(curr);
+      root.head := null;
+      return;
+    end if;
+    
+    -- Walk to last item
+    while curr.chain /= null loop
+      prev := curr;
+      curr := curr.chain;
+    end loop;
+    
+    -- curr is last element / prev is second-to-last
+    
+    -- unlink last item
+    prev.chain := null;
+    
+    -- free allocated payload first
+    if curr.frame.data /= null then
+      deallocate(curr.frame.data);
+    end if;
+    
+    -- free queue node
+    deallocate(curr);
+  end procedure;
+
+  procedure frame_queue_delete(
+    variable root  : inout frame_queue_root_t;
+    variable frm : out frame_t;
+    constant index : in integer)
+  is
+    variable curr : frame_queue_t;
+    variable prev : frame_queue_t := null;
+    variable i    : integer := 0;
+  begin
+    frm.data := null; -- default
+    -- Empty queue
+    if root.head = null then
+      return;
+    end if;
+    
+    curr := root.head;
+    
+    -- Special case: delete head
+    if index = 0 then
+      root.head := curr.chain;
+      
+      if curr.frame.data /= null then
+        frm := curr.frame;
+        deallocate(curr.frame.data);
+      end if;
+
+      deallocate(curr);
+      return;
+    end if;
+    
+    -- Walk list to find index
+    while curr /= null and i < index loop
+      prev := curr;
+      curr := curr.chain;
+      i := i + 1;
+    end loop;
+    
+    -- Index out of range, nothing to delete
+    if curr = null then
+      return;
+    end if;
+    
+    -- Remove curr: prev -> curr.chain
+    prev.chain := curr.chain;
+    
+    -- Free payload
+    if curr.frame.data /= null then
+      frm := curr.frame;
+      deallocate(curr.frame.data);
+    end if;
+    
+    -- Free node
+    deallocate(curr);
   end procedure;
 
   function shift_left(cfg : config_t;
