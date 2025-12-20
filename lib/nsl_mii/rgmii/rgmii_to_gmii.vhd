@@ -10,7 +10,8 @@ use nsl_io.diff.all;
 
 entity rgmii_to_gmii is
   generic(
-    clock_delay_ps_c: natural := 0
+    clock_delay_ps_c: natural := 0;
+    data_delay_ps_c: natural := 0
     );
   port(
     rgmii_i : in  work.rgmii.rgmii_io_group_t;
@@ -26,6 +27,7 @@ architecture beh of rgmii_to_gmii is
   signal gmii_s : work.gmii.gmii_io_group_t;
   signal clock_s : std_ulogic;
   signal diff_clock_s : diff_pair;
+  signal data_delayed_s: std_ulogic_vector(4 downto 0);
   
 begin
 
@@ -47,15 +49,27 @@ begin
       );
 
   diff_clock_s <= swap(to_diff(clock_s));
+
+  data_delay: nsl_io.delay.input_bus_delay_fixed
+    generic map(
+      width_c => 5,
+      delay_ps_c => data_delay_ps_c,
+      is_ddr_c => true
+      )
+    port map(
+      data_i(0)      => rgmii_s.ctl,
+      data_i(1 to 4) => rgmii_s.d,
+      data_o => data_delayed_s
+    );
   
+
   ddr_input: nsl_io.ddr.ddr_bus_input
     generic map(
       ddr_width => 5
       )
     port map(
       clock_i          => diff_clock_s,
-      dd_i(3 downto 0) => rgmii_s.d,
-      dd_i(4)          => rgmii_s.ctl,
+      dd_i             => data_delayed_s,
       d_o(3 downto 0)  => gmii_s.data(3 downto 0),
       d_o(4)           => gmii_s.en,
       d_o(8 downto 5)  => gmii_s.data(7 downto 4),

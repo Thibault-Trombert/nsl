@@ -123,7 +123,8 @@ package rgmii is
 
   component gmii_to_rgmii is
     generic(
-      clock_delay_ps_c: natural := 0
+      clock_delay_ps_c: natural := 0;
+      data_delay_ps_c: natural := 0
       );
     port(
       gmii_clk_i : in std_ulogic;
@@ -135,7 +136,8 @@ package rgmii is
 
   component rgmii_to_gmii is
     generic(
-      clock_delay_ps_c: natural := 0
+      clock_delay_ps_c: natural := 0;
+      data_delay_ps_c: natural := 0
       );
     port(
       rgmii_i : in  rgmii_io_group_t;
