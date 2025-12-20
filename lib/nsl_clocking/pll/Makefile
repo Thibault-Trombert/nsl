@@ -7,7 +7,7 @@ endif
 ifneq ($(filter lattice-ice40,$(hwdep)),)
 vhdl-sources += pll_basic_ice40.vhd
 deps += nsl_data.text
-deps += sb_ice
+deps += sb_ice.components
 endif
 
 ifneq ($(filter lattice-machxo2,$(hwdep)),)

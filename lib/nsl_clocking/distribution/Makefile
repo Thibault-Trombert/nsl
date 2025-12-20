@@ -16,7 +16,7 @@ endif
 
 ifeq ($(hwdep),lattice-ice40)
 vhdl-sources += clock_buffer_ice40.vhd
-deps += sb_ice
+deps += sb_ice.components
 endif
 
 ifeq ($(hwdep),gowin)
