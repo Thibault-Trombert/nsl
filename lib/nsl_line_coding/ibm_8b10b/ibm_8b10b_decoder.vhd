@@ -14,7 +14,9 @@ entity ibm_8b10b_decoder is
     clock_i : in std_ulogic;
     reset_n_i : in std_ulogic;
 
+    valid_i : in std_ulogic := '1';
     data_i : in code_word_t;
+    valid_o : out std_ulogic;
     data_o : out data_t;
     code_error_o : out std_ulogic;
     disparity_error_o : out std_ulogic
@@ -31,10 +33,12 @@ begin
     type regs_t is
     record
       -- Stage 1
+      s1_valid : std_ulogic;
       c : classification_10b8b_t;
       data : code_word_t;
 
       -- Stage 2
+      s2_valid : std_ulogic;
       r : decoded_10b8b_t;
     end record;
 
@@ -52,21 +56,30 @@ begin
       end if;
 
       if reset_n_i = '0' then
+        r.s1_valid <= '0';
+        r.s2_valid <= '0';
         r.r.disparity <= '0';
       end if;
     end process;
 
-    transition: process(r, data_i) is
+    transition: process(r, data_i, valid_i) is
     begin
       rin <= r;
 
-      rin.c <= classify_10b8b(data_i);
-      rin.data <= data_i;
-      
-      rin.r <= merge_10b8b(r.data, r.r.disparity, r.c,
+      rin.s1_valid <= valid_i;
+      if valid_i = '1' then
+        rin.c <= classify_10b8b(data_i);
+        rin.data <= data_i;
+      end if;
+
+      rin.s2_valid <= r.s1_valid;
+      if r.s1_valid = '1' then
+        rin.r <= merge_10b8b(r.data, r.r.disparity, r.c,
                            implementation_c = "logic_strict");
+      end if;
     end process;
 
+    valid_o <= r.s2_valid;
     data_o <= r.r.data;
     disparity_error_o <= r.r.disparity_error;
     code_error_o <= r.r.code_error;
@@ -76,6 +89,7 @@ begin
   generate
     type regs_t is
     record
+      valid: std_ulogic;
       rd: std_ulogic;
       code_error, disparity_error: std_ulogic;
       data: data_t;
@@ -90,24 +104,29 @@ begin
       end if;
 
       if reset_n_i = '0' then
+        r.valid <= '0';
         r.rd <= '0';
       end if;
     end process;
 
-    transition: process(r, data_i) is
+    transition: process(r, data_i, valid_i) is
       variable d_o : data_t;
       variable rd_o, err_o, rderr_o, k_o : std_ulogic;
     begin
       rin <= r;
 
-      nsl_line_coding.ibm_8b10b_spec.decode(data_i, r.rd,
-                                            d_o, rd_o, err_o, rderr_o);
-      rin.rd <= rd_o;
-      rin.data <= d_o;
-      rin.code_error <= err_o;
-      rin.disparity_error <= rderr_o;
+      rin.valid <= valid_i;
+      if valid_i = '1' then
+        nsl_line_coding.ibm_8b10b_spec.decode(data_i, r.rd,
+                                              d_o, rd_o, err_o, rderr_o);
+        rin.rd <= rd_o;
+        rin.data <= d_o;
+        rin.code_error <= err_o;
+        rin.disparity_error <= rderr_o;
+      end if;
     end process;
 
+    valid_o <= r.valid;
     data_o <= r.data;
     code_error_o <= r.code_error;
     disparity_error_o <= r.disparity_error;
@@ -117,6 +136,7 @@ begin
   generate
     type regs_t is
     record
+      valid: std_ulogic;
       rd: std_ulogic;
       code_error, disparity_error: std_ulogic;
       data: data_t;
@@ -136,24 +156,29 @@ begin
       end if;
 
       if reset_n_i = '0' then
+        r.valid <= '0';
         r.rd <= '0';
       end if;
     end process;
 
-    transition: process(r, data_i) is
+    transition: process(r, data_i, valid_i) is
       variable d_o : data_t;
       variable rd_o, err_o, rderr_o : std_ulogic;
     begin
       rin <= r;
 
-      nsl_line_coding.ibm_8b10b_table.decode(data_i, r.rd,
-                                             d_o, rd_o, err_o, rderr_o);
-      rin.rd <= rd_o;
-      rin.data <= d_o;
-      rin.code_error <= err_o;
-      rin.disparity_error <= rderr_o;
+      rin.valid <= valid_i;
+      if valid_i = '1' then
+        nsl_line_coding.ibm_8b10b_table.decode(data_i, r.rd,
+                                               d_o, rd_o, err_o, rderr_o);
+        rin.rd <= rd_o;
+        rin.data <= d_o;
+        rin.code_error <= err_o;
+        rin.disparity_error <= rderr_o;
+      end if;
     end process;
 
+    valid_o <= r.valid;
     data_o <= r.data;
     code_error_o <= r.code_error;
     disparity_error_o <= r.disparity_error;
@@ -165,6 +190,7 @@ begin
 
     type regs_t is
     record
+      lut_lookup, valid: std_ulogic;
       data: data_t;
       code_err, rd_err, rd : std_ulogic;
     end record;
@@ -224,26 +250,34 @@ begin
       end if;
 
       if reset_n_i = '0' then
+        r.lut_lookup <= '0';
+        r.valid <= '0';
         r.rd <= '0';
       end if;
     end process;
 
-    transition: process(r, data_s, rd_toggle_s, dec_err_s, rd_err_s) is
+    transition: process(r, valid_i, data_s, rd_toggle_s, dec_err_s, rd_err_s) is
     begin
       rin <= r;
 
-      rin.data <= data_s;
-      if r.rd = '0' then
-        rin.code_err <= dec_err_s(0);
-        rin.rd_err <= rd_err_s(0);
-        rin.rd <= rd_toggle_s xor r.rd xor rd_err_s(0);
-      else
-        rin.code_err <= dec_err_s(1);
-        rin.rd_err <= rd_err_s(1);
-        rin.rd <= rd_toggle_s xor r.rd xor rd_err_s(1);
+      rin.lut_lookup <= valid_i;
+
+      rin.valid <= r.lut_lookup;
+      if r.lut_lookup = '1' then
+        rin.data <= data_s;
+        if r.rd = '0' then
+          rin.code_err <= dec_err_s(0);
+          rin.rd_err <= rd_err_s(0);
+          rin.rd <= rd_toggle_s xor r.rd xor rd_err_s(0);
+        else
+          rin.code_err <= dec_err_s(1);
+          rin.rd_err <= rd_err_s(1);
+          rin.rd <= rd_toggle_s xor r.rd xor rd_err_s(1);
+        end if;
       end if;
     end process;
 
+    valid_o <= r.valid;
     data_o <= r.data;
     code_error_o <= r.code_err;
     disparity_error_o <= r.rd_err;

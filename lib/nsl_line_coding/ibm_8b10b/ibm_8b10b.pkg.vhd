@@ -121,7 +121,9 @@ package ibm_8b10b is
       clock_i : in std_ulogic;
       reset_n_i : in std_ulogic;
 
+      valid_i: in std_ulogic := '1';
       data_i : in data_t;
+      valid_o: out std_ulogic;
       data_o : out code_word_t
       );
   end component;
@@ -158,7 +160,9 @@ package ibm_8b10b is
       clock_i : in std_ulogic;
       reset_n_i : in std_ulogic;
 
+      valid_i : in std_ulogic := '1';
       data_i : in code_word_t;
+      valid_o : out std_ulogic;
       data_o : out data_t;
       code_error_o : out std_ulogic;
       disparity_error_o : out std_ulogic

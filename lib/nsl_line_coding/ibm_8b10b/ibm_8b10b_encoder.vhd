@@ -14,7 +14,9 @@ entity ibm_8b10b_encoder is
     clock_i : in std_ulogic;
     reset_n_i : in std_ulogic;
 
+    valid_i: in std_ulogic := '1';
     data_i : in data_t;
+    valid_o: out std_ulogic;
     data_o : out code_word_t
     );
 end entity;
@@ -30,11 +32,13 @@ begin
     type regs_t is
     record
       -- Stage 1
+      s1_valid: std_ulogic;
       cl5 : classification_5b6b_t;
       cl3 : classification_3b4b_t;
       control : std_ulogic;
 
       -- Stage 2
+      s2_valid : std_ulogic;
       ret : encoded_8b10b_t;
     end record;
 
@@ -52,22 +56,31 @@ begin
       end if;
 
       if reset_n_i = '0' then
+        r.s1_valid <= '0';
+        r.s2_valid <= '0';
         r.ret.rd <= '0';
         r.control <= '0';
       end if;
     end process;
 
-    transition: process(r, data_i) is
+    transition: process(r, data_i, valid_i) is
     begin
       rin <= r;
 
-      rin.cl5 <= classify_5b6b(data_i.data(4 downto 0), data_i.control);
-      rin.cl3 <= classify_3b4b(data_i.data(7 downto 5), data_i.control);
-      rin.control <= data_i.control;
+      rin.s1_valid <= valid_i;
+      if valid_i = '1' then
+        rin.cl5 <= classify_5b6b(data_i.data(4 downto 0), data_i.control);
+        rin.cl3 <= classify_3b4b(data_i.data(7 downto 5), data_i.control);
+        rin.control <= data_i.control;
+      end if;
 
-      rin.ret <= merge_8b10b(r.ret.rd, r.control, r.cl5, r.cl3);
+      rin.s2_valid <= r.s1_valid;
+      if r.s1_valid = '1' then
+        rin.ret <= merge_8b10b(r.ret.rd, r.control, r.cl5, r.cl3);
+      end if;
     end process;
 
+    valid_o <= r.s2_valid;
     data_o <= r.ret.data;
   end generate;
 
@@ -77,6 +90,7 @@ begin
 
     type regs_t is
     record
+      valid: std_ulogic;
       rd: std_ulogic;
       data: code_word_t;
     end record;
@@ -90,21 +104,26 @@ begin
       end if;
 
       if reset_n_i = '0' then
+        r.valid <= '0';
         r.rd <= '0';
       end if;
     end process;
 
-    transition: process(r, data_i) is
+    transition: process(r, data_i, valid_i) is
       variable d_o : code_word_t;
       variable rd_o : std_ulogic;
     begin
       rin <= r;
 
-      nsl_line_coding.ibm_8b10b_spec.encode(data_i, r.rd, d_o, rd_o);
-      rin.rd <= to_logic(rd_o = '1');
-      rin.data <= d_o;
+      rin.valid <= valid_i;
+      if valid_i = '1' then
+        nsl_line_coding.ibm_8b10b_spec.encode(data_i, r.rd, d_o, rd_o);
+        rin.rd <= to_logic(rd_o = '1');
+        rin.data <= d_o;
+      end if;
     end process;
 
+    valid_o <= r.valid;
     data_o <= r.data;
   end generate;
 
@@ -114,6 +133,7 @@ begin
 
     type regs_t is
     record
+      valid: std_ulogic;
       rd: std_ulogic;
       data: code_word_t;
     end record;
@@ -132,21 +152,26 @@ begin
       end if;
 
       if reset_n_i = '0' then
+        r.valid <= '0';
         r.rd <= '0';
       end if;
     end process;
 
-    transition: process(r, data_i) is
+    transition: process(r, data_i, valid_i) is
       variable d_o : code_word_t;
       variable rd_o : std_ulogic;
     begin
       rin <= r;
 
-      nsl_line_coding.ibm_8b10b_table.encode(data_i, r.rd, d_o, rd_o);
-      rin.rd <= to_logic(rd_o = '1');
-      rin.data <= d_o;
+      rin.valid <= valid_i;
+      if valid_i = '1' then
+        nsl_line_coding.ibm_8b10b_table.encode(data_i, r.rd, d_o, rd_o);
+        rin.rd <= to_logic(rd_o = '1');
+        rin.data <= d_o;
+      end if;
     end process;
 
+    valid_o <= r.valid;
     data_o <= r.data;
   end generate;
   
@@ -183,6 +208,13 @@ begin
     end function;
     
   begin
+    valid_prop: process(clock_i) is
+    begin
+      if rising_edge(clock_i) then
+        valid_o <= valid_i;
+      end if;
+    end process;
+    
     lut: nsl_memory.lut_sync.lut_sync_1p
       generic map(
         input_width_c => 10,
