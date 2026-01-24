@@ -849,21 +849,21 @@ package body axi4_stream is
       end if;
     end if;
 
-    if cfg.user_width /= 0 then
+    if cfg.user_width /= 0 and user'length /= 0 then
       assert user'length = cfg.user_width
         report "Bad user length"
         severity failure;
       ret.user(cfg.user_width-1 downto 0) := user;
     end if;
 
-    if cfg.dest_width /= 0 then
+    if cfg.dest_width /= 0 and dest'length /= 0 then
       assert dest'length = cfg.dest_width
         report "Bad dest length"
         severity failure;
       ret.dest(cfg.dest_width-1 downto 0) := dest;
     end if;
 
-    if cfg.id_width /= 0 then
+    if cfg.id_width /= 0 and id'length /= 0 then
       assert id'length = cfg.id_width
         report "Bad id length"
         severity failure;
