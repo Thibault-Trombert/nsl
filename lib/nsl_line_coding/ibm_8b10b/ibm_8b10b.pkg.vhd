@@ -69,29 +69,29 @@ package ibm_8b10b is
 
   -- Named constants for existing control codes.
   -- idle
-  constant K23_7 : data_t := control(23, 7);
+  constant K23_7 : data_t := ("11110111", '1');
   -- idle
-  constant K27_7 : data_t := control(27, 7);
-  constant K28_0 : data_t := control(28, 0);
+  constant K27_7 : data_t := ("11111011", '1');
+  constant K28_0 : data_t := ("00011100", '1');
   -- is comma
-  constant K28_1 : data_t := control(28, 1);
-  constant K28_2 : data_t := control(28, 2);
-  constant K28_3 : data_t := control(28, 3);
-  constant K28_4 : data_t := control(28, 4);
+  constant K28_1 : data_t := ("00111100", '1');
+  constant K28_2 : data_t := ("01011100", '1');
+  constant K28_3 : data_t := ("01111100", '1');
+  constant K28_4 : data_t := ("10011100", '1');
   -- is comma, 50% transition
-  constant K28_5 : data_t := control(28, 5);
-  constant K28_6 : data_t := control(28, 6);
+  constant K28_5 : data_t := ("10111100", '1');
+  constant K28_6 : data_t := ("11011100", '1');
   -- is comma, repetition yields alternative RL5, forbidden
-  constant K28_7 : data_t := control(28, 7);
+  constant K28_7 : data_t := ("11111100", '1');
   -- idle
-  constant K29_7 : data_t := control(29, 7);
-  constant K30_7 : data_t := control(30, 7);
+  constant K29_7 : data_t := ("11111101", '1');
+  constant K30_7 : data_t := ("11111110", '1');
 
   -- Notable data words
   -- Triggers 0101010101 (transmit right to left)
-  constant D21_5 : data_t := data(21, 5);
+  constant D21_5 : data_t := ("10110101", '0');
   -- Triggers 1010101010 (transmit right to left)
-  constant D10_2 : data_t := data(10, 2);
+  constant D10_2 : data_t := ("01001010", '0');
   
   -- 8B/10B streaming encoder. Disparity is internal, it is reset on
   -- block reset. Input to output latency is implementation specific.
@@ -217,5 +217,54 @@ package body ibm_8b10b is
       & "."
       & to_string(to_integer(unsigned(d.data(7 downto 5))));
   end function;
+
+  function selftest return boolean
+  is
+  begin
+    assert K23_7 = control(23, 7)
+      report "Bad constant declaration"
+      severity failure;
+    assert K27_7 = control(27, 7)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_0 = control(28, 0)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_1 = control(28, 1)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_2 = control(28, 2)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_3 = control(28, 3)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_4 = control(28, 4)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_5 = control(28, 5)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_6 = control(28, 6)
+      report "Bad constant declaration"
+      severity failure;
+    assert K28_7 = control(28, 7)
+      report "Bad constant declaration"
+      severity failure;
+    assert K29_7 = control(29, 7)
+      report "Bad constant declaration"
+      severity failure;
+    assert K30_7 = control(30, 7)
+      report "Bad constant declaration"
+      severity failure;
+    assert D21_5 = data(21, 5)
+      report "Bad constant declaration"
+      severity failure;
+    assert D10_2 = data(10, 2)
+      report "Bad constant declaration"
+      severity failure;
+    return true;
+  end function;
+  constant selftest_ok: boolean := selftest;
 
 end package body;
