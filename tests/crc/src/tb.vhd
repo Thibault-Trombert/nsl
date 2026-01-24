@@ -213,6 +213,26 @@ begin
     wait;
   end process;
 
+  usb3_data: process
+    constant params_c : nsl_data.crc.crc_params_t := nsl_inet.ethernet.fcs_params_c;
+    constant context: log_context := "USB3 Data";
+    variable tmp : crc_state_t;
+  begin
+    assert_equal(context, "",
+                 from_hex("8bf36207"),
+                 crc_spill(params_c,
+                           crc_update(params_c, crc_init(params_c), from_hex("1032547698badcfe10"))),
+                 failure);
+
+    assert_equal(context, "1032547698badcfe108bf36207",
+                 true,
+                 crc_is_valid(params_c, from_hex("1032547698badcfe108bf36207")),
+                 failure);
+
+    log_info(context, "done");
+    wait;
+  end process;
+
   -- Synthetic test vectors  
   hdlc: process
     constant params_c : nsl_data.crc.crc_params_t := nsl_line_coding.hdlc.fcs_params_c;
