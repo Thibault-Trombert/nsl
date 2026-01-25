@@ -1154,7 +1154,8 @@ package body axi4_stream is
   is
   begin
     return "<AXISm"
-      &" "&to_string(masked(bytes(cfg, a), strobe(cfg, a)), mask => keep(cfg, a), masked_out_value => "==")
+      &if_else(is_valid(cfg, a), " ",  " !valid ")
+      &to_string(masked(bytes(cfg, a), strobe(cfg, a)), mask => keep(cfg, a), masked_out_value => "==")
       &if_else(cfg.id_width>0, " I:"&to_string(id(cfg, a)), "")
       &if_else(cfg.user_width>0, " U:"&to_string(user(cfg, a)), "")
       &if_else(cfg.dest_width>0, " O:"&to_string(dest(cfg, a)), "")
@@ -2079,6 +2080,7 @@ package body axi4_stream is
                                      sev: severity_level := failure) 
  is
     variable a_frm, b_frm: frame_t;
+    variable data_ok, user_ok, id_ok, dest_ok: boolean;
   begin
     while a.head /= null
     loop
@@ -2088,12 +2090,19 @@ package body axi4_stream is
         severity sev;
 
       frame_queue_get(b, b_frm);
-      
-      assert a_frm.data.all = b_frm.data.all
-        and a_frm.id(cfg.id_width-1 downto 0) = b_frm.id(cfg.id_width-1 downto 0)
-        and a_frm.user(cfg.user_width-1 downto 0) = b_frm.user(cfg.user_width-1 downto 0)
-        and a_frm.dest(cfg.dest_width-1 downto 0) = b_frm.dest(cfg.dest_width-1 downto 0)
-        report "Mismatch between frames, left from "&to_string(a_frm.ts)&" "&to_string(a_frm.data.all)&", right from "&to_string(b_frm.ts)&" "&to_string(b_frm.data.all)
+
+      data_ok := a_frm.data.all = b_frm.data.all;
+      id_ok := cfg.id_width = 0 or a_frm.id(cfg.id_width-1 downto 0) = b_frm.id(cfg.id_width-1 downto 0);
+      user_ok := cfg.user_width = 0 or a_frm.user(cfg.user_width-1 downto 0) = b_frm.user(cfg.user_width-1 downto 0);
+      dest_ok := cfg.dest_width = 0 or a_frm.dest(cfg.dest_width-1 downto 0) = b_frm.dest(cfg.dest_width-1 downto 0);
+      assert data_ok and id_ok and user_ok and dest_ok
+        report "Mismatch between frames"
+        &", left from "&to_string(a_frm.ts)
+        &" "&to_string(a_frm.data.all)&"/"&to_string(a_frm.id(cfg.id_width-1 downto 0))
+        &"/"&to_string(a_frm.user(cfg.user_width-1 downto 0))&"/"&to_string(a_frm.dest(cfg.dest_width-1 downto 0))
+        &", right from "&to_string(b_frm.ts)
+        &" "&to_string(b_frm.data.all)&"/"&to_string(b_frm.id(cfg.id_width-1 downto 0))
+        &"/"&to_string(b_frm.user(cfg.user_width-1 downto 0))&"/"&to_string(b_frm.dest(cfg.dest_width-1 downto 0))
         severity sev;
 
       deallocate(a_frm.data);
