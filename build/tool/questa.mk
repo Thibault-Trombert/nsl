@@ -51,7 +51,7 @@ $(build-dir)/project.do: $(sources) $(MAKEFILE_LIST)
 $(build-dir)/simulate.do: $(build-dir)/sources.do $(MAKEFILE_LIST)
 	$(call file-clear,$@)
 	$(call file-append,$@,source $(build-dir)/sources.do)
-	$(call file-append,$@,vsim $(foreach x,$(topcell-generics),-g$x) -quiet -work $(top-lib) $(top-entity) +dumpports+nocollapse)
+	$(call file-append,$@,vsim $(foreach x,$(topcell-generics),-g$x) -quiet -work $(top-lib) $(top-entity) +dumpports+nocollapse -t 1ps)
 #	$(call file-append,$@,vcd dumpports -file $(top-entity).vcd /*)
 	$(call file-append,$@,onfinish default)
 	$(call file-append,$@,run -all)
@@ -71,7 +71,7 @@ endef
 
 define _questa-project-add-verilog
 	$(call file-append,$1,Project_File_'$$(grep -c Project_File_P_ $@)' = $2)
-	$(call file-append,$1,Project_File_P_'$$(grep -c Project_File_P_ $@)' = file_type vhdl folder {Top Level} compile_to $($2-library) vhdl_use93 $(_QUESTA_VHDL_VERSION_$($($2-library)-vhdl-version))
+	$(call file-append,$1,Project_File_P_'$$(grep -c Project_File_P_ $@)' = cover_toggle 0 file_type verilog group_id 0 cover_exttoggle 0 cover_nofec 0 cover_cond 0 vlog_1995compat 2001 vlog_nodebug 0 last_compile 1769181840 cover_fsm 0 cover_branch 0 vlog_noload 0 folder {Top Level} vlog_enable0In 0 cover_excludedefault 0 vlog_disableopt 0 cover_covercells 0 cover_optlevel 3 vlog_hazard 0 vlog_showsource 0 voptflow 1 ood 0 vlog_0InOptions {} toggle - vlog_options {} compile_to $($2-library) vlog_upper 0 cover_noshort 0 compile_order '$$(grep -c Project_File_P_ $@)' dont_compile 0 cover_expr 0 cover_stmt 0)
 
 endef
 
