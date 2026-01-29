@@ -46,4 +46,58 @@ package serdes is
       );
   end component;
 
+  component serdes_output is
+    generic(
+      -- Whether to send parallel_i from left or right.
+      left_first_c : boolean := false;
+      ddr_mode_c : boolean := false;
+      -- Whether we are going to delay block
+      to_delay_c : boolean := false;
+      -- Must be even for ddr mode.
+      ratio_c : positive
+      );
+    port(
+      -- * DDR mode: parallel_clock * ratio / 2
+      -- * non-DDR mode: parallel_clock * ratio
+      serial_clock_i : in std_ulogic;
+      parallel_clock_i : in std_ulogic;
+      reset_n_i : in std_ulogic;
+
+      -- This vector will be used left to right or right to left
+      -- depending on generic.
+      parallel_i : in std_ulogic_vector(0 to ratio_c-1);
+      serial_o : out std_ulogic
+      );
+  end component;
+
+  component serdes_input is
+    generic(
+      -- Whether to receive parallel_i from left or right.
+      left_first_c : boolean := false;
+      -- Whether we sample on rising edge only or on both edges
+      ddr_mode_c : boolean := false;
+      -- Whether we are from delay block (requires specific inputs in
+      -- some implementations)
+      from_delay_c : boolean := false;
+      -- Must be even for ddr mode.
+      -- Actual limits are dependent on implementation.
+      ratio_c : positive
+      );
+    port(
+      -- * DDR mode: parallel_clock * ratio / 2
+      -- * non-DDR mode: parallel_clock * ratio
+      serial_clock_i : in std_ulogic;
+      parallel_clock_i : in std_ulogic;
+      reset_n_i : in std_ulogic;
+
+      serial_i : in std_ulogic;
+      -- Whatever the direction of vector bound here,
+      -- parallel word will be set depending on left_first_c.
+      parallel_o : out std_ulogic_vector(0 to ratio_c-1);
+
+      bitslip_i : in std_ulogic;
+      mark_o : out std_ulogic
+      );
+  end component;
+
 end package serdes;

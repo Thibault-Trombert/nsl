@@ -2,8 +2,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library gowin;
-
 entity serdes_ddr10_input is
   generic(
     left_to_right_c : boolean := false
