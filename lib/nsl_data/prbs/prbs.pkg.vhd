@@ -5,6 +5,15 @@ use nsl_data.bytestream.all;
 use nsl_logic.logic.xor_reduce;
 
 -- Generic PRBS implementation
+--
+-- Usage pattern for generating PRBS data:
+--   To get N bits and advance state, use both functions together:
+--     bits := prbs_bit_string(state, poly, N);  -- get output bits
+--     state := prbs_forward(state, poly, N);    -- advance state
+--
+--   prbs_bit_string returns bits but does not modify state.
+--   prbs_forward advances state but does not return bits.
+--   Both are needed for correct PRBS generation.
 package prbs is
 
   -- A PRBS state
@@ -16,8 +25,8 @@ package prbs is
   function "/="(x, y:prbs_state) return boolean;
   function bitswap(x:prbs_state) return prbs_state;
 
-  -- Moves `count` cycles forward in the PRBS stream, yields next
-  -- state.
+  -- Advances state by `count` cycles. Does not return the output bits.
+  -- Use prbs_bit_string to get the bits before advancing.
   function prbs_forward(state, poly : prbs_state;
                          count : integer := 1) return prbs_state;
 
@@ -28,10 +37,12 @@ package prbs is
   -- state.
   function prbs_backward(state, poly : prbs_state;
                          count : integer := 1) return prbs_state;
-  -- Generates a PRBS byte string from initial value and generating
-  -- polynom
+  -- Returns `length` output bytes from state. Does not advance state.
   function prbs_byte_string(init, poly : prbs_state;
                             length : integer) return byte_string;
+
+  -- Returns `length` output bits from state. Does not advance state.
+  -- Use prbs_forward to advance the state afterwards.
   function prbs_bit_string(init, poly : prbs_state;
                            length : integer) return std_ulogic_vector;
 
