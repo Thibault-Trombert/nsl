@@ -8,6 +8,7 @@ package bool is
   function to_logic(i : boolean) return std_ulogic;
 
   function if_else(i : boolean; a, b : integer) return integer;
+  function if_else(i : boolean; a, b : real) return real;
   function if_else(i : boolean; a, b : std_ulogic) return std_ulogic;
   function if_else(i : boolean; a, b : std_ulogic_vector) return std_ulogic_vector;
   function if_else(i : boolean; a, b : unsigned) return unsigned;
@@ -31,6 +32,15 @@ package body bool is
   end function;
 
   function if_else(i : boolean; a, b : integer) return integer is
+  begin
+    if i then
+      return a;
+    else
+      return b;
+    end if;
+  end function;
+
+  function if_else(i : boolean; a, b : real) return real is
   begin
     if i then
       return a;
