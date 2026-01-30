@@ -2081,12 +2081,15 @@ package body axi4_stream is
  is
     variable a_frm, b_frm: frame_t;
     variable data_ok, user_ok, id_ok, dest_ok: boolean;
+    variable count: integer := 0;
   begin
     while a.head /= null
     loop
       frame_queue_get(a, a_frm);
+      count := count + 1;
+
       assert b.head /= null
-        report "Right queue is shorter than left one"
+        report "Right queue is shorter than left one, after "&to_string(count)&" frames"
         severity sev;
 
       frame_queue_get(b, b_frm);
@@ -2096,7 +2099,7 @@ package body axi4_stream is
       user_ok := cfg.user_width = 0 or a_frm.user(cfg.user_width-1 downto 0) = b_frm.user(cfg.user_width-1 downto 0);
       dest_ok := cfg.dest_width = 0 or a_frm.dest(cfg.dest_width-1 downto 0) = b_frm.dest(cfg.dest_width-1 downto 0);
       assert data_ok and id_ok and user_ok and dest_ok
-        report "Mismatch between frames"
+        report "Mismatch between frames at index "&to_string(count)
         &", left from "&to_string(a_frm.ts)
         &" "&to_string(a_frm.data.all)&"/"&to_string(a_frm.id(cfg.id_width-1 downto 0))
         &"/"&to_string(a_frm.user(cfg.user_width-1 downto 0))&"/"&to_string(a_frm.dest(cfg.dest_width-1 downto 0))
@@ -2110,7 +2113,7 @@ package body axi4_stream is
     end loop;
 
     assert b.head = null
-      report "Left queue is shorter than right one"
+      report "Left queue is shorter than right one, after "&to_string(count)&" frames"
       severity sev;
   end procedure;
 
