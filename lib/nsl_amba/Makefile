@@ -11,6 +11,7 @@ packages += stream_routing
 packages += apb_routing
 packages += mm_stream_adapter
 packages += mm_fifo
+packages += mm_routing
 packages += axi_apb
 packages += stream_traffic
 packages += stream_to_udp

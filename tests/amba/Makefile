@@ -6,6 +6,7 @@ tb += axi4_mm_transactor
 tb += axi4_apb_bridge
 tb += axi4_apb_bridge_dispatch
 tb += axi4_mm_cdc
+tb += axi4_mm_crossbar
 tb += axi4_mm_lite_ram
 tb += axi4_mm_lite_regmap
 tb += axi4_mm_lite_stream_endpoint
