@@ -31,5 +31,6 @@ tb += axi4_stream_fifo_clean
 tb += axi4_stream_crc_checker
 tb += axi4_stream_padder
 tb += axi4_stream_atomic
+tb += axi4_mm_shared_bus
 
 include ../subdir.mk

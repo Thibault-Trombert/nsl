@@ -4,6 +4,7 @@ vhdl-sources += axi4_mm_error_slave.vhd
 vhdl-sources += axi4_mm_crossbar_slave_port.vhd
 vhdl-sources += axi4_mm_crossbar_master_port.vhd
 vhdl-sources += axi4_mm_crossbar.vhd
+vhdl-sources += axi4_mm_shared_bus.vhd
 
 deps += nsl_amba.axi4_mm
 deps += nsl_amba.address

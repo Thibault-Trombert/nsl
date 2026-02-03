@@ -63,4 +63,39 @@ package mm_routing is
       );
   end component;
 
+  -- Shared bus N-to-M AXI4-MM interconnect.
+  -- Low-cost alternative to crossbar: only one transaction at a time globally.
+  -- Trades throughput for minimal logic and wire count.
+  --
+  -- Features:
+  -- - Single outstanding transaction globally
+  -- - No pipelining
+  -- - Fixed priority arbitration: lower master index first
+  -- - IDs pass through
+  -- - Writes take priority over reads from same master
+  --
+  -- default_slave_c controls handling of unmapped addresses:
+  -- - If < 0: an internal error slave is instantiated, unmapped accesses return DECERR
+  -- - If >= 0: unmapped addresses route to the external slave at that index
+  component axi4_mm_shared_bus is
+    generic(
+      config_c : work.axi4_mm.config_t;
+      master_count_c : positive;
+      routing_table_c : work.address.address_vector;
+      default_slave_c : integer := -1
+      );
+    port(
+      clock_i : in std_ulogic;
+      reset_n_i : in std_ulogic;
+
+      -- From masters
+      slave_i : in work.axi4_mm.master_vector(0 to master_count_c-1);
+      slave_o : out work.axi4_mm.slave_vector(0 to master_count_c-1);
+
+      -- To slaves
+      master_o : out work.axi4_mm.master_vector(0 to routing_table_c'length-1);
+      master_i : in work.axi4_mm.slave_vector(0 to routing_table_c'length-1)
+      );
+  end component;
+
 end package mm_routing;
