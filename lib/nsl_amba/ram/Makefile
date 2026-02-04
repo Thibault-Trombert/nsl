@@ -5,6 +5,7 @@ vhdl-sources += axi4_mm_full_ram.vhd
 vhdl-sources += axi4_mm_lite_ram.vhd
 
 deps += nsl_memory.ram
+deps += nsl_memory.streamer
 deps += nsl_logic.bool
 deps += nsl_logic.logic
 deps += nsl_data.bytestream

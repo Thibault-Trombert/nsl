@@ -117,27 +117,23 @@ begin
     type state_t is (
       ST_RESET,
       ST_IDLE,
-      ST_READ,
-      ST_WAIT
+      ST_READ
       );
 
-    type rsp_t is (
-      RSP_IDLE,
-      RSP_SEND
-      );
+    subtype sideband_t is std_ulogic_vector(config_c.user_width
+                                            + config_c.id_width
+                                            + 1 - 1 downto 0);
 
-    type ram_data_vector is array(integer range <>) of ram_data_t;
-    constant ram_latency_c : natural := 2;
-    constant fifo_depth_c : natural := ram_latency_c + 2;
+    signal read_req_valid_s, read_req_ready_s : std_ulogic;
+    signal read_req_addr_s : ram_addr_t;
+    signal read_req_sideband_s, read_val_sideband_s : sideband_t;
+    signal read_val_valid_s, read_val_ready_s : std_ulogic;
+    signal read_val_data_s : ram_data_t;
 
     type regs_t is
     record
       state: state_t;
-      rsp: rsp_t;
       transaction: transaction_t;
-      rdata_valid: std_ulogic_vector(0 to ram_latency_c-1);
-      fifo_fillness: integer range 0 to fifo_depth_c;
-      fifo: ram_data_vector(integer range 0 to fifo_depth_c);
     end record;
 
     signal r, rin: regs_t;
@@ -150,22 +146,12 @@ begin
 
       if reset_n_i = '0' then
         r.state <= ST_RESET;
-        r.rsp <= RSP_IDLE;
-        r.fifo_fillness <= 0;
-        r.rdata_valid <= (others => '0');
       end if;
     end process;
 
-    transition: process(r, axi_i, read_data_s) is
-      variable fifo_put, fifo_pop : boolean;
+    transition: process(r, axi_i, read_req_ready_s) is
     begin
       rin <= r;
-
-      fifo_put := false;
-      fifo_pop := false;
-
-      rin.rdata_valid <= r.rdata_valid(1 to r.rdata_valid'right) & "0";
-      fifo_put := r.rdata_valid(0) = '1';
 
       case r.state is
         when ST_RESET =>
@@ -178,73 +164,75 @@ begin
           end if;
 
         when ST_READ =>
-          if r.fifo_fillness < fifo_depth_c - ram_latency_c then
-            rin.rdata_valid(rin.rdata_valid'right) <= '1';
+          if read_req_ready_s = '1' then
             rin.transaction <= step(config_c, r.transaction);
             if is_last(config_c, r.transaction) then
-              rin.state <= ST_WAIT;
-            end if;
-          end if;
-
-        when ST_WAIT =>
-          if r.rdata_valid = (r.rdata_valid'range => '0')
-            and (r.fifo_fillness = 0
-                 or (r.fifo_fillness = 1 and is_ready(config_c, axi_i.r))) then
-            rin.state <= ST_IDLE;
-          end if;
-      end case;
-
-      case r.rsp is
-        when RSP_IDLE =>
-          if r.state = ST_READ then
-            rin.rsp <= RSP_SEND;
-          end if;
-
-        when RSP_SEND =>
-          if r.fifo_fillness > 0 and is_ready(config_c, axi_i.r) then
-            fifo_pop := true;
-            if r.rdata_valid = (r.rdata_valid'range => '0') and r.fifo_fillness = 1 and r.state = ST_WAIT then
-              rin.rsp <= RSP_IDLE;
+              rin.state <= ST_IDLE;
             end if;
           end if;
       end case;
-
-      if fifo_pop then
-        rin.fifo(0 to r.fifo'right-1) <= r.fifo(1 to r.fifo'right);
-        if fifo_put then
-          rin.fifo(r.fifo_fillness-1) <= read_data_s;
-        else
-          rin.fifo_fillness <= r.fifo_fillness - 1;
-        end if;
-      elsif fifo_put then
-        rin.fifo(r.fifo_fillness) <= read_data_s;
-        rin.fifo_fillness <= r.fifo_fillness + 1;
-      end if;
     end process;
 
     moore: process(r) is
     begin
-      read_address_s <= resize(address(config_c, r.transaction, config_c.data_bus_width_l2), read_address_s'length);
-      read_enable_s <= to_logic(r.state /= ST_IDLE and r.state /= ST_RESET);
-      axi_o.ar <= accept(config_c, r.state = ST_IDLE);
+      read_req_valid_s <= '0';
+      read_req_addr_s <= (others => '-');
+      read_req_sideband_s <= (others => '-');
 
-      case r.rsp is
-        when RSP_IDLE =>
-          axi_o.r <= read_data_defaults(config_c);
+      axi_o.ar <= accept(config_c, false);
+
+      case r.state is
+        when ST_RESET =>
+          null;
+
+        when ST_IDLE =>
+          axi_o.ar <= accept(config_c, true);
           
-        when RSP_SEND =>
-          -- As we did for write path above, we map our memory as
-          -- big-endian.
-          axi_o.r <= read_data(config_c,
-                               id => id(config_c, r.transaction),
-                               value => unsigned(r.fifo(0)),
-                               endian => ENDIAN_BIG,
-                               resp => RESP_OKAY,
-                               user => user(config_c, r.transaction),
-                               last => r.state = ST_WAIT and r.fifo_fillness = 1 and r.rdata_valid = (r.rdata_valid'range => '0'),
-                               valid => r.fifo_fillness /= 0);
+        when ST_READ =>
+          read_req_valid_s <= '1';
+          read_req_addr_s <= resize(address(config_c, r.transaction, config_c.data_bus_width_l2), read_req_addr_s'length);
+          read_req_sideband_s <= user(config_c, r.transaction)
+                                 & id(config_c, r.transaction)
+                                 & to_logic(is_last(config_c, r.transaction));
       end case;            
     end process;
+
+    axi_o.r <= read_data(config_c,
+                         id => read_val_sideband_s(config_c.id_width downto 1),
+                         value => unsigned(read_val_data_s),
+                         endian => ENDIAN_BIG,
+                         resp => RESP_OKAY,
+                         user => read_val_sideband_s(read_val_sideband_s'left downto read_val_sideband_s'left - config_c.user_width + 1),
+                         last => read_val_sideband_s(0) = '1',
+                         valid => read_val_valid_s = '1');
+
+    read_val_ready_s <= to_logic(is_ready(config_c, axi_i.r));
+
+    streamer: nsl_memory.streamer.memory_streamer
+      generic map(
+        addr_width_c => ram_addr_t'length,
+        data_width_c => 8 * ram_strobe_t'length,
+        memory_latency_c => 1,
+        sideband_width_c => read_req_sideband_s'length
+        )
+      port map(
+        clock_i => clock_i,
+        reset_n_i => reset_n_i,
+
+        addr_valid_i => read_req_valid_s,
+        addr_ready_o => read_req_ready_s,
+        addr_i => read_req_addr_s,
+        sideband_i => read_req_sideband_s,
+
+        data_valid_o => read_val_valid_s,
+        data_ready_i => read_val_ready_s,
+        data_o => read_val_data_s,
+        sideband_o => read_val_sideband_s,
+
+        mem_enable_o => read_enable_s,
+        mem_address_o => read_address_s,
+        mem_data_i => read_data_s
+        );
   end block;
   
   fifo: nsl_memory.ram.ram_2p_homogeneous
@@ -252,7 +240,7 @@ begin
       addr_size_c => ram_addr_t'length,
       word_size_c => 8,
       data_word_count_c => ram_strobe_t'length,
-      registered_output_c => true,
+      registered_output_c => false,
       b_can_write_c => false
       )
     port map(
@@ -269,5 +257,5 @@ begin
       b_address_i => read_address_s,
       b_data_o => read_data_s
       );
-
+      
 end architecture;
