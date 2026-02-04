@@ -45,11 +45,15 @@ package address is
                                 address: unsigned;
                                 default: natural := 0) return natural;
 
+  -- Returns whether address matches routing table entry at
+  -- index. Also returns true if address doesn't match any entry and
+  -- index equals default_index.
   function routing_table_matches_entry(width: natural;
                                        rt: address_vector;
                                        address: unsigned;
-                                       index: natural) return boolean;
-  
+                                       index: natural;
+                                       default_index: integer := -1) return boolean;
+
 end package;
 
 package body address is
@@ -202,24 +206,35 @@ package body address is
   begin
     for i in rtx'range
     loop
-      if routing_table_matches_entry(width, rtx, address, i) then
+      if routing_table_matches_entry(width, rtx, address, i, default) then
         return i;
       end if;
     end loop;
 
+    -- Should not be necessary
     return default;
   end function;
 
   function routing_table_matches_entry(width: natural;
                                        rt: address_vector;
                                        address: unsigned;
-                                       index: natural) return boolean
+                                       index: natural;
+                                       default_index: integer := -1) return boolean
   is
     alias rtx: address_vector(0 to rt'length-1) is rt;
-    constant a: unsigned(width-1 downto 0) := rtx(index)(width-1 downto 0);
-    constant b: unsigned(width-1 downto 0) := resize(address, width);
+    constant a: unsigned(width-1 downto 0) := resize(address, width);
+    variable matched_another : boolean := false;
   begin
-    return std_match(a, b);
+    -- If direct match, this is either ours or someone else's
+    for i in rtx'range
+    loop
+      if std_match(rtx(i)(width-1 downto 0), a) then
+        return i = index;
+      end if;
+    end loop;
+
+    -- Now, all is left is default.
+    return index = default_index;
   end function;
-  
+
 end package body address;
