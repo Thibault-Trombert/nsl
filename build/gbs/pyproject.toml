@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "gbs-plugin-nsl"
 version = "0.1.0"
 description = "GBS plugin for loading NSL tree repositories"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "gbs",
 ]

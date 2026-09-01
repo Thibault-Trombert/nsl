@@ -331,16 +331,16 @@ package body bytestream is
       severity failure;
   end procedure;
 
-  function shift_left(s: byte_string;
-                      b: byte := dontcare_byte_c) return byte_string
-  is
-    alias xs: byte_string(0 to s'length-1) is s;
-  begin
-    if s'length = 0 then
-      return null_byte_string;
-    end if;
-    return xs(1 to xs'right) & b;
-  end function;
+    function shift_left(s: byte_string;
+                        b: byte := dontcare_byte_c) return byte_string
+    is
+      alias xs: byte_string(0 to s'length-1) is s;
+    begin
+      if s'length = 0 then
+        return null_byte_string;
+      end if;
+      return xs(1 to xs'right) & b;
+    end function;
 
   function shift_right(s: byte_string;
                        b: byte := dontcare_byte_c) return byte_string

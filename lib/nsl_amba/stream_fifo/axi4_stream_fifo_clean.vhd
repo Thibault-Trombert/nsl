@@ -148,8 +148,8 @@ begin
 
         in_i          => fifo_i,
         in_o          => fifo_o,
-        in_commit_i   => r.do_commit,
-        in_rollback_i => r.do_rollback,
+        in_commit_i   => do_commit_s,
+        in_rollback_i => do_rollback_s,
         in_free_o     => in_free_o,
         out_pkt_available_o => open,
 

@@ -6,6 +6,7 @@ vhdl-sources += fifo_shift_register.vhd
 vhdl-sources += fifo_homogeneous.vhd
 vhdl-sources += fifo_narrower.vhd
 vhdl-sources += fifo_cancellable.vhd
+#vhdl-sources += fifo_region_cancellable.vhd
 vhdl-sources += fifo_widener.vhd
 vhdl-sources += fifo_count.vhd
 

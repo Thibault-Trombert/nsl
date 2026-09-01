@@ -1,5 +1,6 @@
 vhdl-sources += stream_routing.pkg.vhd
 vhdl-sources += axi4_stream_funnel.vhd
+vhdl-sources += axi4_stream_funnel_tagged.vhd
 vhdl-sources += axi4_stream_dispatch.vhd
 vhdl-sources += axi4_stream_router.vhd
 

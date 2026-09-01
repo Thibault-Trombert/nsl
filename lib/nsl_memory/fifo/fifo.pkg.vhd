@@ -249,6 +249,32 @@ package fifo is
       );
   end component;
 
+  component fifo_region_cancellable
+    generic(
+      data_width_c    : integer;
+      word_count_l2_c : integer;
+      nbr_of_region   : integer
+      );
+    port(
+      reset_n_i : in  std_ulogic;
+      clock_i   : in  std_ulogic;
+
+      out_data_o      : out std_ulogic_vector(data_width_c-1 downto 0);
+      out_ready_i     : in  std_ulogic;
+      out_valid_o     : out std_ulogic;
+      out_commit_i    : in  std_ulogic := '1';
+      out_rollback_i  : in  std_ulogic := '0';
+      out_available_o : out unsigned(word_count_l2_c downto 0);
+
+      in_data_i     : in  std_ulogic_vector(data_width_c-1 downto 0);
+      in_valid_i    : in  std_ulogic;
+      in_ready_o    : out std_ulogic;
+      in_commit_i   : in  std_ulogic := '1';
+      in_rollback_i : in  std_ulogic := '0';
+      in_free_o     : out unsigned(word_count_l2_c downto 0)
+      );
+  end component;
+
   -- A fifo that only counts for valid/ready. This is like a fifo with 0-bit
   -- data words
   component fifo_count

@@ -26,6 +26,31 @@ package stream_routing is
       );
   end component;
 
+  -- claim_i: dynamic per-source hold; while claim_i(elected)='1' on a last
+  -- beat, the current source is kept.
+  -- Source going idle always forces re-arbitration.
+  -- is_prio_o: asserted when the elected source is a priority source.
+  component axi4_stream_funnel_tagged is
+    generic(
+      in_config_c : config_t;
+      out_config_c : config_t;
+      source_count_c : positive
+      );
+    port(
+      clock_i : in std_ulogic;
+      reset_n_i : in std_ulogic;
+
+      in_i : in master_vector(0 to source_count_c-1);
+      in_o : out slave_vector(0 to source_count_c-1);
+
+      claim_i : in std_ulogic_vector(0 to source_count_c - 1);
+
+      is_prio_o : out std_ulogic;
+      out_o : out master_t;
+      out_i : in slave_t
+      );
+  end component;
+
   component axi4_stream_dispatch is
     generic(
       in_config_c : config_t;

@@ -1,0 +1,4 @@
+#!/bin/sh
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build
+ghdl -r --workdir=. -P/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build -P/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build -P/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build -P/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build -P/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build -P/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build -P/home/trombert/work/nsl/tests/amba/axi4_mm_transactor/ghdl-build -P. -Wno-hide -P. --work=work meta_tb   --ieee-asserts=disable --unbuffered $*

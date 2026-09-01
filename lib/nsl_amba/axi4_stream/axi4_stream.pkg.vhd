@@ -2,11 +2,12 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library nsl_logic, nsl_math, nsl_data, work;
+library nsl_logic, nsl_math, nsl_data, work, nsl_simulation;
 use nsl_logic.bool.all;
 use nsl_data.bytestream.all;
 use nsl_data.endian.all;
 use nsl_data.text.all;
+use nsl_simulation.logging.all;
 
 -- This package defines AXI4-Stream bus signals and accessors.
 --
@@ -37,6 +38,8 @@ package axi4_stream is
   subtype user_t is std_ulogic_vector(max_user_width_c - 1 downto 0);
   subtype id_t is std_ulogic_vector(max_id_width_c - 1 downto 0);
   subtype dest_t is std_ulogic_vector(max_dest_width_c - 1 downto 0);
+
+  type ulogic_stream_t is access std_ulogic_vector;
 
   -- Configuration parameters for an AXI-Stream interface
   type config_t is
@@ -385,6 +388,24 @@ package axi4_stream is
                            variable user : out std_ulogic_vector;
                            variable dest : out std_ulogic_vector);
 
+  procedure packet_receive(constant cfg: config_t;
+                                   signal clock: in std_ulogic;
+                                   signal stream_i: in master_t;
+                                   signal stream_o: out slave_t;
+                                   variable packet : out byte_stream;
+                                   variable id : out std_ulogic_vector;
+                                   variable user : out ulogic_stream_t;
+                                   variable dest : out std_ulogic_vector);
+
+  procedure packet_ustream_receive(constant cfg: config_t;
+                                   signal clock: in std_ulogic;
+                                   signal stream_i: in master_t;
+                                   signal stream_o: out slave_t;
+                                   variable packet : out byte_string;
+                                   variable id : out std_ulogic_vector;
+                                   variable user : out std_ulogic_vector;
+                                   variable dest : out std_ulogic_vector);
+
   procedure packet_check(constant cfg: config_t;
                          signal clock: in std_ulogic;
                          signal stream_i: in master_t;
@@ -550,12 +571,28 @@ package axi4_stream is
     ts: time;
   end record;
 
+  type frame_ustream_t is
+  record
+    id: id_t;
+    data: byte_stream;
+    dest: dest_t;
+    user: ulogic_stream_t;
+    ts: time;
+  end record;
+
   -- Writes a frame to signals, takes ownership of frame buffer
   procedure frame_put(constant cfg: config_t;
                       signal clock: in std_ulogic;
                       signal stream_i: in slave_t;
                       signal stream_o: out master_t;
                       variable frm: frame_t);
+
+  -- user is an access to std_ulogic_vector
+  procedure frame_put(constant cfg: config_t;
+                      signal clock: in std_ulogic;
+                      signal stream_i: in slave_t;
+                      signal stream_o: out master_t;
+                      variable frm: frame_ustream_t);
   
   -- Reads a frame from signals
   procedure frame_get(constant cfg: config_t;
@@ -564,6 +601,12 @@ package axi4_stream is
                       signal stream_o: out slave_t;
                       variable frm: out frame_t);
 
+  procedure frame_get(constant cfg: config_t;
+                              signal clock: in std_ulogic;
+                              signal stream_i: in master_t;
+                              signal stream_o: out slave_t;
+                              variable frm: out frame_ustream_t);
+
   -- Factory function for a frame
   impure function frame(
     constant data: byte_string := null_byte_string;
@@ -571,6 +614,13 @@ package axi4_stream is
     constant id:   std_ulogic_vector := na_suv;
     constant user: std_ulogic_vector := na_suv)
     return frame_t;
+
+  impure function frame(
+    constant data: byte_string := null_byte_string;
+    constant dest: std_ulogic_vector := na_suv;
+    constant id:   std_ulogic_vector := na_suv;
+    constant user: std_ulogic_vector := na_suv)
+    return frame_ustream_t;
 
   -- Frame queue for testbenches
   type frame_queue_item_t;
@@ -588,6 +638,23 @@ package axi4_stream is
   end record;
 
   type frame_queue_root_t is access frame_queue_root_item_t;
+
+  -- Frame queue for testbenches
+  type frame_queue_ustream_item_t;
+  type frame_queue_ustream_t is access frame_queue_ustream_item_t;
+  
+  type frame_queue_ustream_item_t is
+  record
+    chain: frame_queue_ustream_t;
+    frame: frame_ustream_t;
+  end record;
+  
+  type frame_queue_ustream_root_item_t is
+  record
+    head: frame_queue_ustream_t;
+  end record;
+
+  type frame_queue_ustream_root_t is access frame_queue_ustream_root_item_t;
     
   procedure frame_clone(
     variable ret: out frame_t;
@@ -597,9 +664,19 @@ package axi4_stream is
   procedure frame_queue_init(
     variable root: inout frame_queue_root_t);
 
+  procedure frame_queue_init(
+    variable root: inout frame_queue_ustream_root_t);
+
   -- Appends a frame to a queue
   procedure frame_queue_put(
     variable root: frame_queue_root_t;
+    constant data: byte_string := null_byte_string;
+    constant dest: std_ulogic_vector := na_suv;
+    constant id:   std_ulogic_vector := na_suv;
+    constant user: std_ulogic_vector := na_suv);
+
+  procedure frame_queue_put(
+    variable root: frame_queue_ustream_root_t;
     constant data: byte_string := null_byte_string;
     constant dest: std_ulogic_vector := na_suv;
     constant id:   std_ulogic_vector := na_suv;
@@ -609,6 +686,10 @@ package axi4_stream is
   procedure frame_queue_put(
     variable root: in frame_queue_root_t;
     variable frm: in frame_t);
+
+  procedure frame_queue_put(
+      variable root: in frame_queue_ustream_root_t;
+      variable frm: in frame_ustream_t);
 
   -- Print queue size 
   procedure get_queue_size(
@@ -631,6 +712,16 @@ package axi4_stream is
   procedure frame_queue_get(
     variable root: frame_queue_root_t;
     variable frm: out frame_t;
+    dt : in time := 10 ns;
+    timeout : in time := 0 ps;
+    sev: severity_level := failure);
+
+  -- Waits for a frame to be present on a queue.
+  -- Polls for queue every dt. After timeout, raises a sev error
+  -- user here is an access to std_ulogic_vector
+  procedure frame_queue_get(
+    variable root: frame_queue_ustream_root_t;
+    variable frm: out frame_ustream_t;
     dt : in time := 10 ns;
     timeout : in time := 0 ps;
     sev: severity_level := failure);
@@ -679,6 +770,23 @@ package axi4_stream is
     dt : in time := 10 ns;
     timeout : in time := 100 us;
     sev: severity_level := failure);
+
+    procedure frame_queue_check(
+      variable root: frame_queue_ustream_root_t;
+      constant data: byte_string := null_byte_string;
+      constant dest: std_ulogic_vector := na_suv;
+      constant id:   std_ulogic_vector := na_suv;
+      constant user: std_ulogic_vector := na_suv;
+      dt : in time := 10 ns;
+      timeout : in time := 0 us;
+      sev: severity_level := failure);
+  
+    procedure frame_queue_check(
+      variable root: in frame_queue_ustream_root_t;
+      variable frm: in frame_ustream_t;
+      dt : in time := 10 ns;
+      timeout : in time := 0 us;
+      sev: severity_level := failure);
 
   -- Sends a frame on master queue and expects exactly matching frame on slave
   -- queue.
@@ -783,10 +891,65 @@ package axi4_stream is
     timeout : in time := 100 us;
     sev: severity_level := failure);
 
+  procedure frame_queue_check_io(
+    variable root_master: in frame_queue_ustream_root_t;
+    variable root_slave: in frame_queue_ustream_root_t;
+    constant data: byte_string := null_byte_string;
+    constant dest: std_ulogic_vector := na_suv;
+    constant id:   std_ulogic_vector := na_suv;
+    constant user: std_ulogic_vector := na_suv;
+    dt : in time := 10 ns;
+    timeout : in time := 100 us;
+    sev: severity_level := failure);
+
+  -- Sends a frame on master queue and expects exactly matching frame on slave
+  -- queue.
+  procedure frame_queue_check_io(
+    variable root_master: in frame_queue_ustream_root_t;
+    variable root_slave: in frame_queue_ustream_root_t;
+    variable frm: in frame_ustream_t;
+    dt : in time := 10 ns;
+    timeout : in time := 100 us;
+    sev: severity_level := failure);
+  
+  -- Sends a frame on master queue and expects frame2 matching on slave
+  -- queue.
+  procedure frame_queue_check_io(
+    variable root_master : in frame_queue_ustream_root_t;
+    variable root_slave : in frame_queue_ustream_root_t;
+    variable frm1 : in frame_ustream_t;
+    variable frm2 : in frame_ustream_t;
+    dt : in time := 10 ns;
+    timeout : in time := 100 us;
+    sev : severity_level := failure);
+
+  procedure frame_queue_check_io(
+      variable root_master : in frame_queue_ustream_root_t;
+      variable root_slave : in frame_queue_ustream_root_t;
+      constant data1 : byte_string := null_byte_string;
+      constant data2 : byte_string := null_byte_string;
+      constant dest1 : std_ulogic_vector := na_suv;
+      constant id1 : std_ulogic_vector := na_suv;
+      constant user1 : std_ulogic_vector := na_suv;
+      constant dest2 : std_ulogic_vector := na_suv;
+      constant id2 : std_ulogic_vector := na_suv;
+      constant user2 : std_ulogic_vector := na_suv;
+      dt : in time := 10 ns;
+      timeout : in time := 100 us;
+      sev : severity_level := failure);
+
   -- Master-side procedure. Takes frames from a queue and puts them to
   -- signals.  Never returns
   procedure frame_queue_master(constant cfg: config_t;
                                variable root: in frame_queue_root_t;
+                               signal clock: in std_ulogic;
+                               signal stream_i: in slave_t;
+                               signal stream_o: out master_t;
+                               timeout : in time := 0 ps;
+                               dt : in time := 10 ns);
+
+  procedure frame_queue_master(constant cfg: config_t;
+                               variable root: in frame_queue_ustream_root_t;
                                signal clock: in std_ulogic;
                                signal stream_i: in slave_t;
                                signal stream_o: out master_t;
@@ -799,6 +962,12 @@ package axi4_stream is
                               dt : in time := 10 ns;
                               timeout : in time := 100 us;
                               sev: severity_level := failure);
+
+  procedure frame_queue_drain(constant cfg: config_t;
+                            variable root: in frame_queue_ustream_root_t;
+                            dt : in time := 10 ns;
+                            timeout : in time := 100 us;
+                            sev: severity_level := failure);
   
   -- Slave-side procedure. Takes frames from signals and puts them to
   -- a queue.  Never returns
@@ -808,6 +977,13 @@ package axi4_stream is
                               signal stream_i: in master_t;
                               signal stream_o: out slave_t;
                                dt : in time := 10 ns);
+
+  procedure frame_queue_slave(constant cfg: config_t;
+                                      variable root: in frame_queue_ustream_root_t;
+                                      signal clock: in std_ulogic;
+                                      signal stream_i: in master_t;
+                                      signal stream_o: out slave_t;
+                                       dt : in time := 10 ns);
 
   -- A queue-only procedure that checks two queues for equality
   procedure frame_queue_assert_equal(constant cfg: config_t;
@@ -828,6 +1004,45 @@ package axi4_stream is
 end package;
 
 package body axi4_stream is
+
+  procedure write(s: inout ulogic_stream_t; constant d: std_ulogic_vector)
+  is
+    variable n: ulogic_stream_t;
+  begin
+    if s /= null then
+      n := new std_ulogic_vector(s.all'length + d'length -1 downto 0);
+      n.all := s.all & d;
+      deallocate(s);
+    else
+      n := new std_ulogic_vector(d'length-1 downto 0);
+      n.all := d;
+    end if;
+    s := n;
+  end procedure;
+
+  procedure write(s: inout ulogic_stream_t; constant d: std_ulogic)
+  is
+    variable n: ulogic_stream_t;
+  begin
+    if s /= null then
+      n := new std_ulogic_vector(s.all'length downto 0);
+      n.all := s.all & d;
+      deallocate(s);
+    else
+      n := new std_ulogic_vector(0 downto 0);
+      n.all(0) := d;
+    end if;
+    s := n;
+  end procedure;
+
+  procedure clear(s: inout ulogic_stream_t)
+  is
+  begin
+    if s /= null then
+      deallocate(s);
+    end if;
+    s := new std_ulogic_vector(0 to -1);
+  end procedure;
 
   function dontcare_pad(v: std_ulogic_vector;
                         w: integer)
@@ -1545,10 +1760,12 @@ package body axi4_stream is
   is
     constant padding_len: integer := (-packet'length) mod cfg.data_width;
     constant padding: byte_string(1 to padding_len) := (others => dontcare_byte_c);
+    constant upadding : std_ulogic_vector(padding_len - 1 downto 0) := (others => '0');
     constant data: byte_string(0 to packet'length+padding_len-1) := packet & padding;
     variable data_strobe: std_ulogic_vector(0 to data'length-1) := (others => '0');
+    variable user_padded : std_ulogic_vector(user'length+padding_len - 1 downto 0) := user & upadding;
     variable data_keep: std_ulogic_vector(0 to data'length-1) := (others => '0');
-    variable index : natural;
+    variable index, uindex : natural;
   begin
     if strobe'length /= 0 then
       data_strobe(0 to strobe'length-1) := strobe;
@@ -1563,17 +1780,37 @@ package body axi4_stream is
     end if;
 
     index := 0;
+    uindex := 0;
+
     while index < data'length
     loop
-      send(cfg, clock, stream_i, stream_o,
-           bytes => data(index to index + cfg.data_width - 1),
-           strobe => data_strobe(index to index + cfg.data_width - 1),
-           keep => data_keep(index to index + cfg.data_width - 1),
-           id => id,
-           user => user,
-           dest => dest,
-           valid => true,
-           last => index >= data'length - cfg.data_width);
+      if user'length /= 0 then 
+        send(cfg, clock, stream_i, stream_o,
+            bytes => data(index to index + cfg.data_width - 1),
+            strobe => data_strobe(index to index + cfg.data_width - 1),
+            keep => data_keep(index to index + cfg.data_width - 1),
+            id => id,
+            user => user_padded(user_padded'length - uindex - 1 downto user_padded'length - uindex - cfg.data_width ),
+            dest => dest,
+            valid => true,
+            last => index >= data'length - cfg.data_width);
+
+        -- case user is a stream
+        if uindex < user_padded'length and user_padded'length > cfg.user_width then
+          uindex := uindex + cfg.data_width;
+        end if;
+      else
+        send(cfg, clock, stream_i, stream_o,
+            bytes => data(index to index + cfg.data_width - 1),
+            strobe => data_strobe(index to index + cfg.data_width - 1),
+            keep => data_keep(index to index + cfg.data_width - 1),
+            id => id,
+            user => user,
+            dest => dest,
+            valid => true,
+            last => index >= data'length - cfg.data_width);
+      end if;
+
       index := index + cfg.data_width;
     end loop;
   end procedure;
@@ -1698,6 +1935,141 @@ package body axi4_stream is
     end loop;
 
     packet := r;
+  end procedure;
+
+  procedure packet_receive(constant cfg: config_t;
+                                   signal clock: in std_ulogic;
+                                   signal stream_i: in master_t;
+                                   signal stream_o: out slave_t;
+                                   variable packet : out byte_stream;
+                                   variable id : out std_ulogic_vector;
+                                   variable user : out ulogic_stream_t;
+                                   variable dest : out std_ulogic_vector)
+  is
+    variable r: byte_stream;
+    variable beat: master_t;
+    variable d: byte_string(0 to cfg.data_width-1);
+    variable u : ulogic_stream_t;
+    variable du : std_ulogic_vector(cfg.user_width - 1 downto 0);
+    constant dontcare_user : std_ulogic_vector(cfg.user_width - 1 downto 0) := (others => '-');
+    variable s, k: std_ulogic_vector(0 to cfg.data_width-1);
+    variable first: boolean := true;
+  begin
+    assert cfg.has_last
+      report "Packet_receive with a byte stream cannot support unframed interface"
+      severity failure;
+
+    clear(r);
+    clear(u);
+    
+    while true
+    loop
+      receive(cfg, clock, stream_i, stream_o, beat);
+
+      d := bytes(cfg, beat);
+      s := strobe(cfg, beat);
+      k := keep(cfg, beat);
+      du := work.axi4_stream.user(cfg, beat);
+
+      for i in d'range
+      loop
+        if k(i) = '1' then
+          if s(i) = '1' then
+            write(r, d(i));
+            -- write(u, du(du'left - i));
+            write(u, du(i));
+          else
+            write(r, dontcare_byte_c);
+            write(u, dontcare_user);
+          end if;
+        end if;
+      end loop;
+      
+      if first then
+        first := false;
+
+        id := work.axi4_stream.id(cfg, beat);
+        dest := work.axi4_stream.dest(cfg, beat);
+      end if;
+
+      if is_last(cfg, beat) then
+        exit;
+      end if;
+    end loop;
+
+    packet := r;
+    user := u;
+  end procedure;
+
+  procedure packet_ustream_receive(constant cfg: config_t;
+                                   signal clock: in std_ulogic;
+                                   signal stream_i: in master_t;
+                                   signal stream_o: out slave_t;
+                                   variable packet : out byte_string;
+                                   variable id : out std_ulogic_vector;
+                                   variable user : out std_ulogic_vector;
+                                   variable dest : out std_ulogic_vector)
+  is
+    variable r: byte_string(0 to packet'length-1);
+    variable beat: master_t;
+    variable d: byte_string(0 to cfg.data_width-1);
+    variable s, k: std_ulogic_vector(0 to cfg.data_width-1);
+    variable du : std_ulogic_vector(cfg.user_width - 1 downto 0);
+    variable u : std_ulogic_vector(user'length - 1 downto 0);
+    variable first: boolean := true;
+    variable should_be_last: boolean;
+    variable offset: integer := 0;
+  begin
+    assert cfg.has_keep or (packet'length mod cfg.data_width = 0)
+      report "Testing for a short packet with no keep will always fail"
+      severity note;
+
+    while offset < r'length
+    loop
+      should_be_last := offset + d'length >= r'length;
+
+      receive(cfg, clock, stream_i, stream_o, beat);
+
+      d := bytes(cfg, beat);
+      s := strobe(cfg, beat);
+      k := keep(cfg, beat);
+      du := work.axi4_stream.user(cfg, beat);
+
+      for i in d'range
+      loop
+        if k(i) = '1' then
+          assert offset + i < r'length
+            report "Extra data at end of packet"
+            severity failure;
+
+          if s(i) = '1' then
+            r(offset + i) := d(i);
+          else
+            r(offset + i) := dontcare_byte_c;
+          end if;
+        end if;
+      end loop;
+
+      u(u'left-offset-1 downto u'left-offset-cfg.user_width) := du;
+      
+      if first then
+        first := false;
+
+        id := work.axi4_stream.id(cfg, beat);
+        dest := work.axi4_stream.dest(cfg, beat);
+      end if;
+
+      if cfg.has_last then
+        assert should_be_last = is_last(cfg, beat)
+          report "At offset "&to_string(offset)&", last is "&if_else(should_be_last, "", "not ")&"expected, but was "&if_else(is_last(cfg, beat), "", "un")&"asserted. Expected payload length: "&to_string(r'length)
+          severity failure;
+      end if;
+
+      offset := offset + d'length;
+    end loop;
+
+    packet := r;
+    user := u;
   end procedure;
 
   procedure packet_check(constant cfg: config_t;
@@ -1989,6 +2361,25 @@ package body axi4_stream is
     return ret;
   end function;
 
+  impure function frame(
+    constant data: byte_string := null_byte_string;
+    constant dest: std_ulogic_vector := na_suv;
+    constant id:   std_ulogic_vector := na_suv;
+    constant user: std_ulogic_vector := na_suv)
+    return frame_ustream_t
+  is
+    variable ret: frame_ustream_t;
+  begin
+    ret.data := new byte_string(0 to data'length-1);
+    ret.data.all := data;
+    ret.id := dontcare_pad(id, max_id_width_c);
+    ret.user := new std_ulogic_vector(user'length - 1 downto 0);
+    ret.user.all := user;
+    ret.dest := dontcare_pad(dest, max_dest_width_c);
+    ret.ts := now;
+    return ret;
+  end function;
+
   procedure frame_clone(
     variable ret: out frame_t;
     variable frm: in frame_t)
@@ -1999,6 +2390,22 @@ package body axi4_stream is
     r.data.all := frm.data.all;
     r.id := dontcare_pad(frm.id, max_id_width_c);
     r.user := dontcare_pad(frm.user, max_user_width_c);
+    r.dest := dontcare_pad(frm.dest, max_dest_width_c);
+    r.ts := frm.ts;
+    ret := r;
+  end procedure;
+
+  procedure frame_clone(
+    variable ret: out frame_ustream_t;
+    variable frm: in frame_ustream_t)
+  is
+    variable r : frame_ustream_t;
+  begin
+    r.data := new byte_string(0 to frm.data'length-1);
+    r.data.all := frm.data.all;
+    r.id := dontcare_pad(frm.id, max_id_width_c);
+    r.user := new std_ulogic_vector(frm.user'length - 1 downto 0);
+    r.user.all := frm.user.all;
     r.dest := dontcare_pad(frm.dest, max_dest_width_c);
     r.ts := frm.ts;
     ret := r;
@@ -2015,6 +2422,21 @@ package body axi4_stream is
     packet_send(cfg, clock, stream_i, stream_o, f.data.all,
                 dest => f.dest(cfg.dest_width-1 downto 0),
                 user => f.user(cfg.user_width-1 downto 0),
+                id => f.id(cfg.id_width-1 downto 0));
+    deallocate(f.data);
+  end procedure;
+
+  procedure frame_put(constant cfg: config_t;
+                              signal clock: in std_ulogic;
+                              signal stream_i: in slave_t;
+                              signal stream_o: out master_t;
+                              variable frm: frame_ustream_t)
+  is
+    variable f : frame_ustream_t := frm;
+  begin
+    packet_send(cfg, clock, stream_i, stream_o, f.data.all,
+                dest => f.dest(cfg.dest_width-1 downto 0),
+                user => f.user.all,
                 id => f.id(cfg.id_width-1 downto 0));
     deallocate(f.data);
   end procedure;
@@ -2036,13 +2458,39 @@ package body axi4_stream is
     frm.user := dontcare_pad(user, max_user_width_c);
     frm.dest := dontcare_pad(dest, max_dest_width_c);
   end procedure;
-
+                        
+  procedure frame_get(constant cfg: config_t;
+                              signal clock: in std_ulogic;
+                              signal stream_i: in master_t;
+                              signal stream_o: out slave_t;
+                              variable frm: out frame_ustream_t)
+  is
+    variable packet : byte_stream;
+    variable id : std_ulogic_vector(cfg.id_width-1 downto 0);
+    variable user : ulogic_stream_t;
+    variable dest : std_ulogic_vector(cfg.dest_width-1 downto 0);
+  begin
+    packet_receive(cfg, clock, stream_i, stream_o, packet, id, user, dest);
+    frm.data := packet;
+    frm.id := dontcare_pad(id, max_id_width_c);
+    frm.user := user;
+    frm.dest := dontcare_pad(dest, max_dest_width_c);
+  end procedure;
+                              
   procedure frame_queue_init(
     variable root: inout frame_queue_root_t)
   is
     variable ret: frame_queue_root_t;
   begin
     root := new frame_queue_root_item_t;
+    root.head := null;
+  end procedure;
+
+  procedure frame_queue_init(
+    variable root: inout frame_queue_ustream_root_t)
+  is
+  begin
+    root := new frame_queue_ustream_root_item_t;
     root.head := null;
   end procedure;
 
@@ -2054,6 +2502,18 @@ package body axi4_stream is
     constant user: std_ulogic_vector := na_suv)
   is
     variable frm : frame_t := frame(data, dest, id, user);
+  begin
+    frame_queue_put(root, frm);
+  end procedure;
+
+  procedure frame_queue_put(
+    variable root: frame_queue_ustream_root_t;
+    constant data: byte_string := null_byte_string;
+    constant dest: std_ulogic_vector := na_suv;
+    constant id:   std_ulogic_vector := na_suv;
+    constant user: std_ulogic_vector := na_suv)
+  is
+    variable frm : frame_ustream_t := frame(data, dest, id, user);
   begin
     frame_queue_put(root, frm);
   end procedure;
@@ -2092,6 +2552,29 @@ package body axi4_stream is
     variable root_v: frame_queue_root_t := root;
   begin
     item_a := new frame_queue_item_t;
+    item_a.frame := frm;
+    item_a.chain := null;
+
+    if root_v.head = null then
+      root_v.head := item_a;
+    else
+      chain_a := root_v.head;
+      while chain_a.chain /= null
+      loop
+        chain_a := chain_a.chain;
+      end loop;
+      chain_a.chain := item_a;
+    end if;
+  end procedure;
+
+  procedure frame_queue_put(
+    variable root: in frame_queue_ustream_root_t;
+    variable frm: in frame_ustream_t)
+  is
+    variable item_a, chain_a: frame_queue_ustream_t;
+    variable root_v: frame_queue_ustream_root_t := root;
+  begin
+    item_a := new frame_queue_ustream_item_t;
     item_a.frame := frm;
     item_a.chain := null;
 
@@ -2191,6 +2674,44 @@ package body axi4_stream is
     deallocate(rx_frm.data);
     deallocate(ref_frm.data);
     check_status := status;
+  end procedure;
+
+  procedure frame_queue_check(
+    variable root: frame_queue_ustream_root_t;
+    constant data: byte_string := null_byte_string;
+    constant dest: std_ulogic_vector := na_suv;
+    constant id:   std_ulogic_vector := na_suv;
+    constant user: std_ulogic_vector := na_suv;
+    dt : in time := 10 ns;
+    timeout : in time := 0 us;
+    sev: severity_level := failure)
+  is
+    variable frm: frame_ustream_t := frame(data, dest, id, user);
+  begin
+    frame_queue_check(root, frm, dt, timeout, sev);
+  end procedure;
+
+  procedure frame_queue_check(
+    variable root: in frame_queue_ustream_root_t;
+    variable frm: in frame_ustream_t;
+    dt : in time := 10 ns;
+    timeout : in time := 0 us;
+    sev: severity_level := failure)
+  is
+    variable rx_frm: frame_ustream_t;
+    variable ref_frm: frame_ustream_t := frm;
+  begin
+    frame_queue_get(root, rx_frm, dt, timeout, sev);
+    assert rx_frm.data.all = ref_frm.data.all
+      and rx_frm.id = ref_frm.id
+      and rx_frm.dest = ref_frm.dest
+      report "Bad frame received, expected "&to_string(ref_frm.data.all)&", received "&to_string(rx_frm.data.all)
+      severity sev;
+    assert rx_frm.user.all = ref_frm.user.all
+      report "Bad user received, expected "&to_string(ref_frm.user.all)&", received "&to_string(rx_frm.user.all)
+      severity sev;
+    deallocate(rx_frm.data);
+    deallocate(ref_frm.data);
   end procedure;
 
   procedure frame_queue_check_io(
@@ -2331,6 +2852,70 @@ package body axi4_stream is
     frame_queue_check_io(root_master, root_slave, frm1, frm2, check_status, dt, timeout, sev);
   end procedure;
 
+   procedure frame_queue_check_io(
+    variable root_master: in frame_queue_ustream_root_t;
+    variable root_slave: in frame_queue_ustream_root_t;
+    constant data: byte_string := null_byte_string;
+    constant dest: std_ulogic_vector := na_suv;
+    constant id:   std_ulogic_vector := na_suv;
+    constant user: std_ulogic_vector := na_suv;
+    dt : in time := 10 ns;
+    timeout : in time := 100 us;
+    sev: severity_level := failure)
+  is
+    variable frm: frame_ustream_t := frame(data, dest, id, user);
+  begin
+    frame_queue_check_io(root_master, root_slave, frm, dt, timeout, sev);
+  end procedure;
+
+  procedure frame_queue_check_io(
+    variable root_master: in frame_queue_ustream_root_t;
+    variable root_slave: in frame_queue_ustream_root_t;
+    variable frm: in frame_ustream_t;
+    dt : in time := 10 ns;
+    timeout : in time := 100 us;
+    sev: severity_level := failure)
+  is
+    variable c : frame_ustream_t;
+  begin
+    frame_clone(c, frm);
+    frame_queue_put(root_master, c);
+    frame_queue_check(root_slave, frm, dt, timeout, sev);
+  end procedure;
+
+  procedure frame_queue_check_io(
+    variable root_master : in frame_queue_ustream_root_t;
+    variable root_slave : in frame_queue_ustream_root_t;
+    variable frm1 : in frame_ustream_t;
+    variable frm2 : in frame_ustream_t;
+    dt : in time := 10 ns;
+    timeout : in time := 100 us;
+    sev : severity_level := failure) is
+  begin
+    frame_queue_put(root_master, frm1);
+    frame_queue_check(root_slave, frm2, dt, timeout, sev);
+  end procedure;
+
+  procedure frame_queue_check_io(
+    variable root_master : in frame_queue_ustream_root_t;
+    variable root_slave : in frame_queue_ustream_root_t;
+    constant data1 : byte_string := null_byte_string;
+    constant data2 : byte_string := null_byte_string;
+    constant dest1 : std_ulogic_vector := na_suv;
+    constant id1 : std_ulogic_vector := na_suv;
+    constant user1 : std_ulogic_vector := na_suv;
+    constant dest2 : std_ulogic_vector := na_suv;
+    constant id2 : std_ulogic_vector := na_suv;
+    constant user2 : std_ulogic_vector := na_suv;
+    dt : in time := 10 ns;
+    timeout : in time := 100 us;
+    sev : severity_level := failure) is
+    variable frm1 : frame_ustream_t := frame(data1, dest1, id1, user1);
+    variable frm2 : frame_ustream_t := frame(data2, dest2, id2, user2);
+  begin
+    frame_queue_check_io(root_master, root_slave, frm1, frm2, dt, timeout, sev);
+  end procedure;
+
   procedure frame_queue_get(
     variable root: frame_queue_root_t;
     variable frm: out frame_t;
@@ -2366,6 +2951,41 @@ package body axi4_stream is
     frm := frame(null_byte_string);
   end procedure;
 
+  procedure frame_queue_get(
+    variable root: frame_queue_ustream_root_t;
+    variable frm: out frame_ustream_t;
+    dt : in time := 10 ns;
+    timeout : in time := 0 ps;
+    sev: severity_level := failure)
+  is
+    variable root_v: frame_queue_ustream_root_t := root;
+    variable item_a: frame_queue_ustream_t;
+    variable ret: frame_ustream_t;
+    variable time_left: time := timeout;
+  begin
+    while time_left > dt or timeout = 0 ps
+    loop
+      if root_v.head /= null then
+        item_a := root_v.head;
+        root_v.head := item_a.chain;
+        ret := item_a.frame;
+        -- log_info("ret.data.all= " & to_string(ret.data.all));
+        deallocate(item_a);
+        frm := ret;
+        return;
+      end if;
+
+      wait for dt;
+
+      if timeout /= 0 ps then
+        time_left := time_left - dt;
+      end if;
+    end loop;
+    assert false
+      report "Timeout while waiting for frame"
+      severity sev;
+  end procedure;
+
   procedure frame_queue_master(constant cfg: config_t;
                                variable root: in frame_queue_root_t;
                                signal clock: in std_ulogic;
@@ -2375,6 +2995,25 @@ package body axi4_stream is
                                dt : in time := 10 ns)
   is
     variable frm: frame_t;
+  begin
+    stream_o <= transfer_defaults(cfg);
+
+    loop
+      frame_queue_get(root, frm, dt, timeout);
+      wait until falling_edge(clock);
+      frame_put(cfg, clock, stream_i, stream_o, frm);
+    end loop;
+  end procedure;
+
+  procedure frame_queue_master(constant cfg: config_t;
+                                       variable root: in frame_queue_ustream_root_t;
+                                       signal clock: in std_ulogic;
+                                       signal stream_i: in slave_t;
+                                       signal stream_o: out master_t;
+                                       timeout : in time := 0 ps;
+                                       dt : in time := 10 ns)
+  is
+    variable frm: frame_ustream_t;
   begin
     stream_o <= transfer_defaults(cfg);
 
@@ -2403,11 +3042,51 @@ package body axi4_stream is
     end loop;
   end procedure;
 
+  procedure frame_queue_slave(constant cfg: config_t;
+                                      variable root: in frame_queue_ustream_root_t;
+                                      signal clock: in std_ulogic;
+                                      signal stream_i: in master_t;
+                                      signal stream_o: out slave_t;
+                                        dt : in time := 10 ns)
+  is
+    variable frm: frame_ustream_t;
+  begin
+    stream_o <= accept(cfg, false);
+
+    loop
+      -- wait until falling_edge(clock);
+      frame_get(cfg, clock, stream_i, stream_o, frm);
+      frame_queue_put(root, frm);
+    end loop;
+  end procedure;
+
   procedure frame_queue_drain(constant cfg: config_t;
                               variable root: in frame_queue_root_t;
                               dt : in time := 10 ns;
                               timeout : in time := 100 us;
                               sev: severity_level := failure)
+  is
+    variable time_left: time := timeout;
+  begin
+    while time_left > dt
+    loop
+      if root.head = null then
+        return;
+      end if;
+      wait for dt;
+      time_left := time_left - dt;
+    end loop;
+
+    assert false
+      report "Timeout while waiting for queue emptiness"
+      severity sev;
+  end procedure;
+
+  procedure frame_queue_drain(constant cfg: config_t;
+                            variable root: in frame_queue_ustream_root_t;
+                            dt : in time := 10 ns;
+                            timeout : in time := 100 us;
+                            sev: severity_level := failure)
   is
     variable time_left: time := timeout;
   begin

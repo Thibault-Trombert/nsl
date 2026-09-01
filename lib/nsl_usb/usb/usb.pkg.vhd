@@ -189,6 +189,7 @@ package usb is
   constant DESCRIPTOR_TYPE_DEVICE_QUALIFIER          : descriptor_type_t := "00000110";
   constant DESCRIPTOR_TYPE_OTHER_SPEED_CONFIGURATION : descriptor_type_t := "00000111";
   constant DESCRIPTOR_TYPE_INTERFACE_POWER           : descriptor_type_t := "00001000";
+  constant DESCRIPTOR_TYPE_BOS                       : descriptor_type_t := "00001111";
 
   -- Table 9-6. Standard Feature Selectors
   constant FEATURE_SELECTOR_DEVICE_REMOTE_WAKEUP : feature_selector_t := "00000001";

@@ -44,7 +44,7 @@ architecture beh of axi4_stream_fifo_cancellable is
   signal in_free_s : integer range 0 to word_count_c;
   signal out_available_s : integer range 0 to word_count_c + 1;
   constant pkt_available_range_l2 : integer := nsl_math.arith.log2(out_pkt_available_range_c+1);
-  signal pkt_counter : unsigned(pkt_available_range_l2-1 downto 0);
+  signal pkt_counter, pkt_counter_acked : unsigned(pkt_available_range_l2-1 downto 0);
 
 
 begin
@@ -91,18 +91,29 @@ begin
 
   packet_counter_proc: process(clock_i, reset_n_i) is
     variable out_v : master_t;
-    variable inc, dec: boolean;
+    variable inc, dec_sp: boolean;
   begin
     if reset_n_i = '0' then 
       pkt_counter <= (others => '0');
+      pkt_counter_acked <= (others => '0');
     elsif rising_edge(clock_i) then
       out_v := vector_unpack(config_c, fifo_elements_c, out_data_s);
-      inc := is_valid(config_c, in_i) and is_last(config_c, in_i);
-      dec := out_data_valid_s = '1' and is_last(config_c, out_v) and is_ready(config_c, out_i);
-      if inc and not dec then
+
+      inc := is_valid(config_c, in_i) and is_last(config_c, in_i) and in_commit_i = '1';
+      dec_sp := out_data_valid_s = '1' and is_last(config_c, out_v) and is_ready(config_c, out_i);
+
+      if inc and not dec_sp then
         pkt_counter <= pkt_counter + 1;
-      elsif dec and not inc then 
+      elsif dec_sp and not inc then 
         pkt_counter <= pkt_counter - 1;
+      end if;
+
+      if pkt_counter > pkt_counter_acked then
+        if out_commit_i = '1' then 
+          pkt_counter_acked <= pkt_counter_acked + 1;
+        elsif out_rollback_i = '1' then
+          pkt_counter <= pkt_counter - 1;
+        end if;
       end if;
     end if;
   end process;
