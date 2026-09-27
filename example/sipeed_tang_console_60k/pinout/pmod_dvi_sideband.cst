@@ -1,0 +1,16 @@
+# The wires a DVI sink on a Pmod needs beyond the Pmod's own header,
+# run to pins of their own.
+#
+# Hot plug detect says a sink is there at all, and DDC is the I2C a
+# source reads the sink's EDID over.  The bus is pulled up on the Pmod,
+# and the driver makes it open drain by driving low or letting go.
+# CEC is wired to D21 and not used.
+
+IO_LOC  "dvi_hpd_o" D22;
+IO_PORT "dvi_hpd_o" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
+
+IO_LOC  "dvi_ddc_sda_io" E22;
+IO_PORT "dvi_ddc_sda_io" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=4;
+
+IO_LOC  "dvi_ddc_scl_io" E21;
+IO_PORT "dvi_ddc_scl_io" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=4;

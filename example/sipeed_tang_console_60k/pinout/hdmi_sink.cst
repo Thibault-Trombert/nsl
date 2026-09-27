@@ -1,0 +1,18 @@
+IO_LOC  "hdmi_ck_i" G15,G16;
+IO_PORT "hdmi_ck_i" IO_TYPE=LVDS25 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "hdmi_dp_i[0]" J14,H14;
+IO_PORT "hdmi_dp_i[0]" IO_TYPE=LVDS25 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "hdmi_dp_i[1]" J15,H15;
+IO_PORT "hdmi_dp_i[1]" IO_TYPE=LVDS25 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "hdmi_dp_i[2]" K17,J17;
+IO_PORT "hdmi_dp_i[2]" IO_TYPE=LVDS25 PULL_MODE=UP BANK_VCCIO=3.3;
+# Gate of the FET grounding the lines' source terminations: a sink
+# holds it low.
+IO_LOC  "hdmi_psv_o" K14;
+IO_PORT "hdmi_psv_o" PULL_MODE=NONE IO_TYPE=LVCMOS33 DRIVE=4;
+IO_LOC  "hdmi_hpd_io" K13;
+IO_PORT "hdmi_hpd_io" PULL_MODE=NONE IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC  "hdmi_ddc_sda_io" L13;
+IO_PORT "hdmi_ddc_sda_io" PULL_MODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
+IO_LOC  "hdmi_ddc_scl_io" M13;
+IO_PORT "hdmi_ddc_scl_io" PULL_MODE=UP IO_TYPE=LVCMOS33 DRIVE=4;
