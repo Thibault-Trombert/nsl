@@ -157,6 +157,13 @@ architecture beh of terminal_frame_generator is
   signal glyph_line_data_s: glyph_line_t;
 begin
 
+  -- The scan walks the grid, and a frame larger than the grid is never
+  -- finished: the generator would stall after its first line.
+  assert geometry_c.width <= 2**column_count_l2_c * font_width_c * font_hscale_c
+    and geometry_c.height <= 2**row_count_l2_c * font_height_c * font_vscale_c
+    report "terminal_frame_generator: frame larger than the character grid"
+    severity failure;
+
   -- Each cell is scanned once in horizontal order (whatever the
   -- horizontal stretching factor and font width.
   --
