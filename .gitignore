@@ -58,3 +58,5 @@ vivado_*.str
 .\#*
 .Xil
 build-results
+*.egg-info
+*.timing.yaml
