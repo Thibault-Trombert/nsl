@@ -18,6 +18,7 @@ entity ddc_edid_slave is
     v_size_mm_c : natural := 0;
     hdmi_c : boolean := false;
     audio_channels_c : natural := 0;
+    audio_rates_c : nsl_video.edid.audio_rate_vector := nsl_video.edid.audio_rates_c;
     address_c : unsigned(7 downto 1) := work.ddc.edid_address_c
     );
   port(
@@ -46,7 +47,8 @@ architecture beh of ddc_edid_slave is
     h_size_mm => h_size_mm_c,
     v_size_mm => v_size_mm_c,
     hdmi => hdmi_c,
-    audio_channels => audio_channels_c);
+    audio_channels => audio_channels_c,
+    audio_rates => audio_rates_c);
 
   -- Concatenation leaves the range up to the type, so it is said here
   alias edid_a : byte_string(0 to edid_c'length-1) is edid_c;

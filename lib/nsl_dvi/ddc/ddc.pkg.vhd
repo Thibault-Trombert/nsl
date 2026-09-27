@@ -47,6 +47,9 @@ package ddc is
       -- Channels of LPCM to ask for, zero for no audio.  Audio needs
       -- an HDMI link to travel on.
       audio_channels_c : natural := 0;
+      -- Sample rates to offer.  A sink that only plays some rates, or
+      -- relies on a rate stated elsewhere, narrows this down.
+      audio_rates_c : nsl_video.edid.audio_rate_vector := nsl_video.edid.audio_rates_c;
       address_c : unsigned(7 downto 1) := edid_address_c
       );
     port(
