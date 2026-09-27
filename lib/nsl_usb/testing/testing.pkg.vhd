@@ -413,6 +413,9 @@ package body testing is
       log_debug("   ! " & packet_to_string(rxdata.all) & " (Received)");
       log_error("   ! " & to_hex_string(rxdata.all));
       log_error("   Received packet does not match");
+      assert false
+        report "Received packet does not match, expected " & to_hex_string(packet)
+        severity failure;
     end if;
 
     deallocate(rxdata);

@@ -3,6 +3,7 @@ vhdl-sources += serial_port.vhd
 vhdl-sources += serial_port_dual.vhd
 vhdl-sources += vendor_bulk_pair.vhd
 vhdl-sources += vendor_framed_pair.vhd
+vhdl-sources += vendor_framed_pair_dual.vhd
 
 deps += nsl_clocking.async
 deps += nsl_logic.bool

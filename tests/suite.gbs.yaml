@@ -699,6 +699,9 @@ projects:
   - name: usb2_framed
     path: usb2_framed
     tags: [ghdl, simulation]
+  - name: usb2_framed_dual
+    path: usb2_framed_dual
+    tags: [ghdl, simulation]
   - name: wishbone_base
     path: wishbone/base
     tags: [ghdl, simulation]
