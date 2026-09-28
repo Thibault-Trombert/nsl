@@ -28,7 +28,15 @@ entity ls_device_bfm is
     -- first data packet of each control read once.
     control_nak_count_c: natural := 0;
     control_silent_count_c: natural := 0;
-    control_bad_crc_once_c: boolean := false
+    control_bad_crc_once_c: boolean := false;
+    -- Interrupt OUT endpoint, 0 for none, and its maximum packet
+    -- size.  Before accepting each report, the endpoint lets
+    -- out_silent_count_c attempts go unanswered, then NAKs
+    -- out_nak_count_c more.
+    interrupt_out_ep_c: natural := 0;
+    interrupt_out_mps_c: natural := 8;
+    out_nak_count_c: natural := 0;
+    out_silent_count_c: natural := 0
     );
   port(
     -- Wire-level connection, seen from the host core: host_i is what
@@ -50,7 +58,23 @@ entity ls_device_bfm is
     report_ready_o: out std_ulogic;
 
     -- While high, report data packets are sent with corrupted CRC16.
-    crc_corrupt_i: in std_ulogic := '0'
+    crc_corrupt_i: in std_ulogic := '0';
+
+    -- Interrupt OUT endpoint sink.  Each report the endpoint accepts
+    -- is presented on out_data_o(0 to out_length_o - 1) along with
+    -- the toggle it came with, and out_valid_o pulses for one bit
+    -- time.  While out_stall_i is high, the endpoint answers STALL.
+    --
+    -- The host sending anything but a well-formed data packet with a
+    -- good CRC16, no longer than interrupt_out_mps_c, with the data
+    -- toggle this endpoint expects, fails the simulation: the device
+    -- never loses an ACK, so the host never has a legitimate reason
+    -- to send the same toggle twice.
+    out_stall_i: in std_ulogic := '0';
+    out_data_o: out nsl_data.bytestream.byte_string(0 to ls_payload_max_c - 1);
+    out_length_o: out natural range 0 to ls_payload_max_c;
+    out_toggle_o: out std_ulogic;
+    out_valid_o: out std_ulogic
     );
 end entity;
 
@@ -119,6 +143,10 @@ begin
     variable dtype: descriptor_type_t;
     variable nak_left, silent_left: natural := 0;
     variable corrupt_next: boolean := false;
+    variable out_toggle: std_ulogic := '0';
+    variable out_nak_left: natural := out_nak_count_c;
+    variable out_silent_left: natural := out_silent_count_c;
+    variable out_len: natural;
 
     procedure rx_wait(variable data: out byte_string;
                       variable length: out natural;
@@ -153,10 +181,17 @@ begin
       ctrl_off := 0;
       ctrl_toggle := '1';
       ep_toggle := '0';
+      out_toggle := '0';
+      out_nak_left := out_nak_count_c;
+      out_silent_left := out_silent_count_c;
     end procedure;
 
   begin
     report_ready_o <= '0';
+    out_data_o <= (others => x"00");
+    out_length_o <= 0;
+    out_toggle_o <= '0';
+    out_valid_o <= '0';
     device_drive.oe <= '0';
     device_drive.dp <= '0';
     device_drive.dm <= '0';
@@ -276,6 +311,7 @@ begin
           log_info(ctx_c, "SET_ADDRESS " & to_string(to_integer(new_addr)));
         elsif setup.request = REQUEST_SET_CONFIGURATION then
           configured := to_integer(setup.value) /= 0;
+          out_toggle := '0';
           log_info(ctx_c, "SET_CONFIGURATION " & to_string(to_integer(setup.value)));
         else
           ctrl_stall := true;
@@ -283,6 +319,62 @@ begin
 
         if ctrl_stall then
           log_info(ctx_c, "Unsupported request, endpoint 0 will stall");
+        end if;
+
+      elsif pid = PID_OUT and interrupt_out_ep_c /= 0
+        and to_integer(tok_ep) = interrupt_out_ep_c then
+        rx_wait(rx, rx_len, response_timeout_c);
+
+        assert rx_len >= 3
+          report "Interrupt OUT data packet has " & to_string(rx_len) & " bytes"
+          severity failure;
+        assert pid_byte_is_correct(rx(0))
+          and (pid_get(rx(0)) = PID_DATA0 or pid_get(rx(0)) = PID_DATA1)
+          report "Interrupt OUT token followed by PID " & to_hex_string(rx(0))
+          severity failure;
+        assert crc_is_valid(data_crc_params_c, rx(1 to rx_len-1))
+          report "Interrupt OUT data packet CRC16 mismatch: "
+          & to_hex_string(rx(0 to rx_len-1))
+          severity failure;
+        out_len := rx_len - 3;
+        assert out_len <= interrupt_out_mps_c
+          report "Interrupt OUT data packet carries " & to_string(out_len)
+          & " bytes, more than the endpoint takes"
+          severity failure;
+
+        if not configured then
+          log_warning(ctx_c, "Interrupt OUT while not configured");
+          ls_packet_send(device_drive, PID_STALL);
+        elsif out_silent_left /= 0 then
+          out_silent_left := out_silent_left - 1;
+          log_info(ctx_c, "Interrupt OUT, staying silent");
+        elsif out_nak_left /= 0 then
+          out_nak_left := out_nak_left - 1;
+          log_info(ctx_c, "Interrupt OUT, NAK");
+          ls_packet_send(device_drive, PID_NAK);
+        elsif out_stall_i = '1' then
+          log_info(ctx_c, "Interrupt OUT, STALL");
+          ls_packet_send(device_drive, PID_STALL);
+        else
+          assert pid_get(rx(0)) = ls_data_pid(out_toggle)
+            report "Interrupt OUT data toggle is " & to_hex_string(rx(0))
+            & ", " & to_hex_string(pid_byte(ls_data_pid(out_toggle)))
+            & " was due"
+            severity failure;
+
+          ls_packet_send(device_drive, PID_ACK);
+          log_info(ctx_c, "Interrupt OUT report " & to_hex_string(rx(1 to rx_len-3)));
+
+          out_data_o <= (others => x"00");
+          out_data_o(0 to out_len-1) <= rx(1 to rx_len-3);
+          out_length_o <= out_len;
+          out_toggle_o <= out_toggle;
+          out_valid_o <= '1';
+          out_toggle := not out_toggle;
+          out_nak_left := out_nak_count_c;
+          out_silent_left := out_silent_count_c;
+          wait for ls_bit_time_c;
+          out_valid_o <= '0';
         end if;
 
       elsif pid = PID_OUT then

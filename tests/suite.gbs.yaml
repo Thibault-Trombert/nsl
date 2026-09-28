@@ -723,6 +723,9 @@ projects:
   - name: usb_hid_host_host_fs
     path: usb_hid_host/host_fs
     tags: [ghdl, simulation, slow]
+  - name: usb_hid_host_output
+    path: usb_hid_host/output
+    tags: [ghdl, simulation, slow]
   - name: usb_hid_host_keyboard
     path: usb_hid_host/keyboard
     tags: [ghdl, simulation, slow]

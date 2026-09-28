@@ -163,7 +163,11 @@ package ls_bfm is
       -- first data packet of each control read once.
       control_nak_count_c: natural := 0;
       control_silent_count_c: natural := 0;
-      control_bad_crc_once_c: boolean := false
+      control_bad_crc_once_c: boolean := false;
+      interrupt_out_ep_c: natural := 0;
+      interrupt_out_mps_c: natural := 8;
+      out_nak_count_c: natural := 0;
+      out_silent_count_c: natural := 0
       );
     port(
       host_i: in usb_io_c;
@@ -176,7 +180,13 @@ package ls_bfm is
       report_valid_i: in std_ulogic := '0';
       report_ready_o: out std_ulogic;
 
-      crc_corrupt_i: in std_ulogic := '0'
+      crc_corrupt_i: in std_ulogic := '0';
+
+      out_stall_i: in std_ulogic := '0';
+      out_data_o: out byte_string(0 to ls_payload_max_c - 1);
+      out_length_o: out natural range 0 to ls_payload_max_c;
+      out_toggle_o: out std_ulogic;
+      out_valid_o: out std_ulogic
       );
   end component;
 
@@ -398,6 +408,10 @@ package body ls_bfm is
       end if;
 
       sym := ls_symbol_get(s.dp, s.dm);
+      -- Stuffing applies up to the last bit, end of packet or not.
+      assert sym /= USB_SYMBOL_SE0 or ones /= 6
+        report "Missing stuffed bit before end of packet"
+        severity failure;
       exit when sym = USB_SYMBOL_SE0;
 
       if sym = USB_SYMBOL_SE1 then
