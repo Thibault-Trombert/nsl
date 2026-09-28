@@ -24,6 +24,10 @@ use nsl_usb.hid_host.all;
 --
 -- Bit timing follows the selected speed. While the driver is released,
 -- transitions realign the receiver's mid-bit sample point.
+--
+-- The output report buffer is filled from its stream port on its own,
+-- independently of the instruction stream, and only while nothing is
+-- pending, so OUTR always reads a stable report.
 entity hid_host_engine is
   generic(
     program_c: program_t;
@@ -34,7 +38,8 @@ entity hid_host_engine is
     -- so is worth declining where only low-speed devices are
     -- expected.  A host built without it sees a full-speed device as
     -- an empty port.
-    full_speed_c: boolean := false
+    full_speed_c: boolean := false;
+    output_report_length_max_c: positive := 16
     );
   port(
     reset_n_i: in std_ulogic;
@@ -47,9 +52,19 @@ entity hid_host_engine is
     status_o: out hid_host_status_t;
 
     report_o: out nsl_amba.axi4_stream.master_t;
-    report_i: in nsl_amba.axi4_stream.slave_t
+    report_i: in nsl_amba.axi4_stream.slave_t;
+
+    output_report_i: in nsl_amba.axi4_stream.master_t
+      := nsl_amba.axi4_stream.transfer_defaults(report_cfg_c);
+    output_report_o: out nsl_amba.axi4_stream.slave_t
     );
 begin
+
+  assert output_report_length_max_c <= output_report_length_limit_c
+    report "hid_host_engine output reports are limited to "
+    & integer'image(output_report_length_limit_c) & " bytes, the largest "
+    & "interrupt packet a device may take"
+    severity failure;
 
   assert clock_rate_c mod 1_500_000 = 0 and clock_rate_c >= 12_000_000
     report "hid_host_engine needs a multiple of 1.5MHz, 12MHz or more: a "
@@ -118,6 +133,18 @@ architecture beh of hid_host_engine is
   constant op_wait_c: std_ulogic_vector(4 downto 0) := opcode_encode(UKP_WAIT);
   constant op_jmp_c: std_ulogic_vector(4 downto 0) := opcode_encode(UKP_JMP);
   constant op_call_c: std_ulogic_vector(4 downto 0) := opcode_encode(UKP_CALL);
+  constant op_outr_c: std_ulogic_vector(4 downto 0) := opcode_encode(UKP_OUTR);
+  constant op_bout_c: std_ulogic_vector(4 downto 0) := opcode_encode(UKP_BOUT);
+  constant op_bstall_c: std_ulogic_vector(4 downto 0) := opcode_encode(UKP_BSTALL);
+  constant op_octl_c: std_ulogic_vector(4 downto 0) := opcode_encode(UKP_OCTL);
+
+  -- Which byte of its data packet OUTR hands to the serializer next.
+  type out_phase_t is (
+    OUT_PID,
+    OUT_PAYLOAD,
+    OUT_CRC_LO,
+    OUT_CRC_HI
+    );
 
   subtype pc_t is unsigned(pc_width_c - 1 downto 0);
 
@@ -134,6 +161,7 @@ architecture beh of hid_host_engine is
     c: std_ulogic;
     nak: std_ulogic;
     err: std_ulogic;
+    stall: std_ulogic;
 
     -- Bit timer and free-running millisecond timer.
     t: unsigned(t_width_c - 1 downto 0);
@@ -183,6 +211,19 @@ architecture beh of hid_host_engine is
     frame: byte_string(0 to report_length_max_c - 1);
     frame_len: natural range 0 to report_length_max_c;
     frame_index: natural range 0 to report_length_max_c - 1;
+
+    -- Output report.  out_len counts the bytes stored so far while
+    -- filling, and is the report length once pending.  out_discard
+    -- swallows the rest of a report too long for the buffer.
+    out_buf: byte_string(0 to output_report_length_max_c - 1);
+    out_len: natural range 0 to output_report_length_max_c;
+    out_pending: std_ulogic;
+    out_discard: boolean;
+    out_toggle: std_ulogic;
+    out_phase: out_phase_t;
+    out_index: natural range 0 to output_report_length_max_c - 1;
+    out_crc: crc_state_t;
+    out_dropped: std_ulogic;
 
     wd: unsigned(wd_width_c - 1 downto 0);
     error: std_ulogic;
@@ -236,6 +277,7 @@ begin
       r.c <= '0';
       r.nak <= '1';
       r.err <= '0';
+      r.stall <= '0';
       r.full_speed <= '0';
       r.frame_no <= (others => '0');
       r.t <= (others => '0');
@@ -267,13 +309,20 @@ begin
       r.frame <= (others => (others => '0'));
       r.frame_len <= 0;
       r.frame_index <= 0;
+      r.out_len <= 0;
+      r.out_pending <= '0';
+      r.out_discard <= false;
+      r.out_toggle <= '0';
+      r.out_phase <= OUT_PID;
+      r.out_index <= 0;
+      r.out_dropped <= '0';
       r.wd <= (others => '0');
       r.error <= '0';
       r.packet <= '0';
     end if;
   end process;
 
-  transition: process(r, sampled_s, report_i) is
+  transition: process(r, sampled_s, report_i, output_report_i) is
     variable op: std_ulogic_vector(4 downto 0);
     variable operand: unsigned(pc_width_c - 1 downto 0);
     variable rx_data: std_ulogic;
@@ -283,6 +332,7 @@ begin
     variable sof_crc: std_ulogic_vector(4 downto 0);
     variable save_index: integer;
     variable payload_count: natural range 0 to control_length_max_c;
+    variable out_check: byte_string(0 to 1);
   begin
     rin <= r;
 
@@ -315,11 +365,14 @@ begin
                                            crc_init(token_crc_params_c),
                                            std_ulogic_vector(r.frame_no)));
 
+    out_check := crc_spill(data_crc_params_c, r.out_crc);
+
     rx_data := nrzi_decode(line(0), r.rx_prev);
     rx_byte := rx_data & r.rx_shift(7 downto 1);
 
     rin.error <= '0';
     rin.packet <= '0';
+    rin.out_dropped <= '0';
 
     if r.ms_count = ms_last_c then
       rin.ms_count <= 0;
@@ -352,6 +405,25 @@ begin
         rin.frame_index <= 0;
       else
         rin.frame_index <= r.frame_index + 1;
+      end if;
+    end if;
+
+    if r.out_pending = '0' and is_valid(report_cfg_c, output_report_i) then
+      if not r.out_discard and r.out_len /= output_report_length_max_c then
+        rin.out_buf(r.out_len) <= bytes(report_cfg_c, output_report_i)(0);
+        rin.out_len <= r.out_len + 1;
+      else
+        rin.out_discard <= true;
+      end if;
+
+      if is_last(report_cfg_c, output_report_i) then
+        if r.out_discard or r.out_len = output_report_length_max_c then
+          rin.out_discard <= false;
+          rin.out_len <= 0;
+          rin.out_dropped <= '1';
+        else
+          rin.out_pending <= '1';
+        end if;
       end if;
     end if;
 
@@ -423,6 +495,7 @@ begin
         rin.rx_crc <= crc_init(data_crc_params_c);
         rin.rx_is_data <= false;
         rin.err <= '0';
+        rin.stall <= '0';
         rin.nak <= '1';
 
         -- Silence consumes the receive budget too; it leaves NAK set.
@@ -504,6 +577,13 @@ begin
 
       elsif op = op_toggle_c then
         rin.c <= not r.c;
+        -- A report pending for a device that went away is not for
+        -- whichever device comes next.
+        if r.c = '1' and r.out_pending = '1' then
+          rin.out_pending <= '0';
+          rin.out_len <= 0;
+          rin.out_dropped <= '1';
+        end if;
 
       elsif op = op_save_c then
         if to_integer(operand(10 downto 6)) <= save_reg_ep0_mps_c
@@ -598,6 +678,9 @@ begin
                       and pid_get(rx_byte) /= PID_STALL then
                       rin.nak <= '0';
                     end if;
+                    if pid_get(rx_byte) = PID_STALL then
+                      rin.stall <= '1';
+                    end if;
                     if pid_get(rx_byte) = PID_DATA0
                       or pid_get(rx_byte) = PID_DATA1 then
                       rin.rx_is_data <= true;
@@ -669,6 +752,73 @@ begin
         rin.tx_index <= 7;
         rin.tx_nrzi <= true;
         rin.tx_active <= '1';
+
+      elsif op = op_outr_c then
+        rin.tx_index <= 7;
+        rin.tx_nrzi <= true;
+        rin.tx_active <= '1';
+        -- Held until the last byte is out, one byte per pass.
+        rin.pc <= r.pc;
+        rin.inst_ready <= '1';
+
+        case r.out_phase is
+          when OUT_PID =>
+            if r.out_toggle = '0' then
+              rin.tx_data <= pid_byte(PID_DATA0);
+            else
+              rin.tx_data <= pid_byte(PID_DATA1);
+            end if;
+            rin.out_crc <= crc_init(data_crc_params_c);
+            rin.out_index <= 0;
+            if r.out_pending = '1' and r.out_len /= 0 then
+              rin.out_phase <= OUT_PAYLOAD;
+            else
+              rin.out_phase <= OUT_CRC_LO;
+            end if;
+
+          when OUT_PAYLOAD =>
+            rin.tx_data <= r.out_buf(r.out_index);
+            rin.out_crc <= crc_update(data_crc_params_c, r.out_crc,
+                                      r.out_buf(r.out_index));
+            if r.out_index + 1 = r.out_len then
+              rin.out_phase <= OUT_CRC_LO;
+            else
+              rin.out_index <= r.out_index + 1;
+            end if;
+
+          when OUT_CRC_LO =>
+            rin.tx_data <= out_check(0);
+            rin.out_phase <= OUT_CRC_HI;
+
+          when OUT_CRC_HI =>
+            rin.tx_data <= out_check(1);
+            rin.out_phase <= OUT_PID;
+            rin.pc <= r.pc + 1;
+            rin.inst_ready <= '0';
+        end case;
+
+      elsif op = op_bout_c then
+        if r.out_pending = '1' then
+          rin.pc <= operand;
+        end if;
+
+      elsif op = op_bstall_c then
+        if r.stall = '1' then
+          rin.pc <= operand;
+        end if;
+
+      elsif op = op_octl_c then
+        if to_integer(operand) = octl_toggle_reset_c then
+          rin.out_toggle <= '0';
+        elsif r.out_pending = '1' then
+          rin.out_pending <= '0';
+          rin.out_len <= 0;
+          if to_integer(operand) = octl_acked_c then
+            rin.out_toggle <= not r.out_toggle;
+          else
+            rin.out_dropped <= '1';
+          end if;
+        end if;
       end if;
     end if;
 
@@ -684,6 +834,12 @@ begin
       rin.oe <= '0';
       rin.error <= '1';
       rin.c <= '0';
+      rin.out_phase <= OUT_PID;
+      if r.c = '1' and r.out_pending = '1' then
+        rin.out_pending <= '0';
+        rin.out_len <= 0;
+        rin.out_dropped <= '1';
+      end if;
     end if;
   end process;
 
@@ -718,6 +874,11 @@ begin
       & std_ulogic_vector(to_unsigned(r.control_left, 8))
       & std_ulogic_vector(to_unsigned(r.control_offset, 8))
       & r.err & std_ulogic_vector(to_unsigned(r.rx_count, 7));
+
+    status_o.output_pending <= r.out_pending = '1';
+    status_o.output_dropped <= r.out_dropped;
+
+    output_report_o <= accept(report_cfg_c, r.out_pending = '0');
 
     if r.frame_len /= 0 then
       report_o <= transfer(report_cfg_c,

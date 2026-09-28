@@ -71,11 +71,12 @@ with the following features:
 
   * CDC-ACM function.
 
-Host side, the library contains a standalone low-speed host dedicated
-to HID input devices (see hid_host/):
+Host side, the library contains a standalone low-/full-speed host
+dedicated to HID devices (see hid_host/):
 
 * Bit-banged low-speed (1.5Mb/s) signaling on D+/D- from a 12MHz
-  clock, no CPU, no external Phy.
+  clock, no CPU, no external Phy.  Full speed (12Mb/s, with
+  start-of-frame generation) is optional and needs a 48MHz clock.
 
 * Microcoded engine whose program is written as VHDL constants and
   assembled at elaboration (see ukp.pkg.vhd and hid_program.pkg.vhd);
@@ -86,15 +87,19 @@ to HID input devices (see hid_host/):
   interrupt IN endpoint polling with CRC16 checking, reports emitted
   as AXI4-Stream frames.
 
+* Optional output reports to an interrupt OUT endpoint, taken as
+  AXI4-Stream frames: one report buffered, sent with the right
+  DATA0/DATA1 toggle and CRC16, retried on NAK or silence, dropped on
+  STALL (``hid_program(..., output_enabled => true)``).
+
 * Generic field extractor mapping report bytes/bits to parallel
   values, and boot-protocol keyboard and mouse wrappers with identity
   matching.
 
 * Wire-level low-speed device BFM in nsl_usb.testing for closed-loop
-  simulation.
+  simulation, with interrupt IN and OUT endpoints.
 
-* Not supported by design: hubs, full-speed devices (would need SOF
-  generation hardware), HID report descriptor parsing.
+* Not supported by design: hubs, HID report descriptor parsing.
 
 The host is a reimplementation of ideas pioneered by two projects:
 hi631's microcoded USB host in the Tang Nano 9K NES port

@@ -11,11 +11,22 @@ use nsl_usb.hid_host.all;
 
 -- Microcode program driving hid_host_engine: enumerate the single
 -- attached full-/low-speed device, record its identity, then poll its
--- interrupt IN endpoint forever.
+-- interrupt IN endpoint forever and, optionally, send it output
+-- reports on its interrupt OUT endpoint.
 --
 -- The program only ever addresses one device at address 1 on endpoint
 -- 1, which is what boot-protocol keyboards, mice and the vast
 -- majority of HID gamepads expose.
+--
+-- Output reports, when enabled, are sent at the first millisecond
+-- tick after they became pending, right after its keep-alive or
+-- start of frame.  An ACK releases the report and flips
+-- the data toggle, a NAK or no answer retries at the next tick, a
+-- STALL drops the report.  Every tick that sent an output report
+-- polls the interrupt IN endpoint straight after and restarts the
+-- poll interval, so IN polling never waits longer than the interval
+-- but runs every millisecond while output reports keep coming.  The
+-- data toggle restarts at DATA0 with every SET_CONFIGURATION.
 --
 -- Control reads use bMaxPacketSize0 and descriptor-relative offsets,
 -- validate CRCs, retry NAKs, and complete their OUT status stage.
@@ -41,7 +52,12 @@ package hid_program is
     configuration_value => 1,
     debounce_ms => 200);
 
-  function hid_program(cfg: hid_program_config_t) return program_t;
+  -- output_enabled adds the output report transactions, to
+  -- output_endpoint.  Without it the program never touches the
+  -- output report buffer, and not one of its words differs.
+  function hid_program(cfg: hid_program_config_t;
+                       output_enabled: boolean := false;
+                       output_endpoint: natural := 1) return program_t;
 
 end package;
 
@@ -86,6 +102,19 @@ package body hid_program is
   constant lbl_device_ka_done_c: label_t := 26;
   constant lbl_config_sof_c: label_t := 27;
   constant lbl_config_ka_done_c: label_t := 28;
+  constant lbl_poll_in_c: label_t := 29;
+  constant lbl_output_c: label_t := 30;
+  constant lbl_output_stall_c: label_t := 31;
+
+  function only_if(enabled: boolean; p: program_t) return program_t
+  is
+    constant none_c: program_t(1 to 0) := (others => (UKP_NOP, 0));
+  begin
+    if enabled then
+      return p;
+    end if;
+    return none_c;
+  end function;
 
   -- Two bit times of single-ended zero followed by idle J.  On
   -- low speed, J is D+ low and D- high.  This is both the end of
@@ -177,6 +206,9 @@ package body hid_program is
   constant descriptor_timeout_c: natural
     := receive_timeout(control_length_max_c);
 
+  -- A handshake is a PID alone.
+  constant handshake_timeout_c: natural := receive_timeout(0);
+
   function control_status return program_t is
   begin
     return token_packet(PID_OUT, default_address_c, control_endpoint_c)
@@ -243,10 +275,15 @@ package body hid_program is
                     length => x"0000");
   end function;
 
-  function hid_program(cfg: hid_program_config_t) return program_t
+  function hid_program(cfg: hid_program_config_t;
+                       output_enabled: boolean := false;
+                       output_endpoint: natural := 1) return program_t
   is
     constant report_timeout_c: natural := receive_timeout(cfg.report_length);
   begin
+    assert output_endpoint >= 1 and output_endpoint <= 15
+      report "Output endpoint must be in 1 to 15"
+      severity failure;
     assert cfg.report_length >= 1 and cfg.report_length <= report_length_max_c
       report "HID report length must be in 1 to "
       & integer'image(report_length_max_c)
@@ -387,7 +424,8 @@ package body hid_program is
 
       -- Identity registers are all written and the device is
       -- configured: publish it.  C is toggled here and on disconnect
-      -- only.
+      -- only.  Configuring resets the endpoints' data toggles.
+      & only_if(output_enabled, out_toggle_reset)
       & toggle
       & jmp(lbl_start_c)
 
@@ -395,12 +433,14 @@ package body hid_program is
       & lbl(lbl_connected_c)
       & bz(lbl_disconnected_c)
       & keepalive(lbl_poll_sof_c, lbl_poll_ka_done_c)
+      & only_if(output_enabled, bout(lbl_output_c))
       & djnz(lbl_poll_wait_c)
 
       -- Interval elapsed: one interrupt IN transaction.  A NAK means
       -- the device has nothing to report, a CRC error means the
       -- report was corrupted; both are retried at the next interval,
       -- and withholding the ACK on error makes the device resend.
+      & lbl(lbl_poll_in_c)
       & token_packet(PID_IN, device_address_c, interrupt_endpoint_c)
       & hiz
       & ldi(report_timeout_c)
@@ -410,6 +450,31 @@ package body hid_program is
       & call(lbl_ack_c)
       & hiz
       & jmp(lbl_start_c)
+
+      -- One interrupt OUT transaction carrying the pending output
+      -- report.  It uses W, which was pacing the poll interval, so
+      -- whatever comes of it the IN poll follows and the interval
+      -- restarts.  A device that got the data but whose ACK was lost
+      -- sees the same toggle again and discards the duplicate.
+      & only_if(output_enabled,
+                lbl(lbl_output_c)
+                & token_packet(PID_OUT, device_address_c,
+                               to_unsigned(output_endpoint, 4))
+                & out_bytes(sync_c)
+                & out_report
+                & eop
+                & hiz
+                & ldi(handshake_timeout_c)
+                & call(lbl_receive_c)
+                & bstall(lbl_output_stall_c)
+                & bnak(lbl_poll_in_c)
+                & berr(lbl_poll_in_c)
+                & out_report_acked
+                & jmp(lbl_poll_in_c)
+
+                & lbl(lbl_output_stall_c)
+                & out_report_dropped
+                & jmp(lbl_poll_in_c))
 
       & lbl(lbl_disconnected_c)
       & toggle

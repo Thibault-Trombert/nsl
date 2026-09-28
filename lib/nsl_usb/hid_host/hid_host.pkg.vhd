@@ -13,6 +13,8 @@ use nsl_usb.ukp.all;
 -- attached device, records its identity, and polls its
 -- interrupt IN endpoint.  Each interrupt report received with a good
 -- CRC is emitted as one last-delimited frame on an AXI4-Stream port.
+-- Where the program asks for it, output reports taken from another
+-- AXI4-Stream port are sent to the device's interrupt OUT endpoint.
 --
 -- hid_host_extractor turns report frames into parallel field values
 -- described by an elaboration-time field list.
@@ -27,6 +29,10 @@ package hid_host is
 
   -- Full-speed EP0 maximum packet size.
   constant control_length_max_c: natural := 64;
+
+  -- Largest output report an engine may be built to buffer: the
+  -- full-speed interrupt endpoint maximum packet size.
+  constant output_report_length_limit_c: natural := 64;
 
   constant report_cfg_c: nsl_amba.axi4_stream.config_t :=
     nsl_amba.axi4_stream.config(bytes => 1, last => true);
@@ -80,6 +86,13 @@ package hid_host is
     -- Diagnostic bytes, MSB first: EP0 MPS, control bytes remaining,
     -- descriptor offset, then ERR in bit 7 and receive count in 6..0.
     control_debug: std_ulogic_vector(31 downto 0);
+    -- An output report is buffered and waits for the device to
+    -- acknowledge it.
+    output_pending: boolean;
+    -- Pulses for every output report dropped rather than delivered:
+    -- one longer than the engine buffers, one the device answered
+    -- with a STALL, or one still pending when the device went away.
+    output_dropped: std_ulogic;
   end record;
 
   -- One extracted report field.  Fields spanning multiple bytes are
@@ -111,7 +124,13 @@ package hid_host is
       -- cycles long where a low-speed one is eight times that, so a
       -- host that handles both needs 48MHz or more.  A host built
       -- without it sees a full-speed device as an empty port.
-      full_speed_c: boolean := false
+      full_speed_c: boolean := false;
+      -- Longest output report the engine buffers, 1 to
+      -- output_report_length_limit_c.  It should not exceed the
+      -- maximum packet size of the device's interrupt OUT endpoint,
+      -- which the engine does not know: at most 8 for a low-speed
+      -- device.
+      output_report_length_max_c: positive := 16
       );
     port(
       reset_n_i: in std_ulogic;
@@ -129,7 +148,24 @@ package hid_host is
       -- boundaries are always preserved.  Zero-length reports emit
       -- nothing.
       report_o: out nsl_amba.axi4_stream.master_t;
-      report_i: in nsl_amba.axi4_stream.slave_t
+      report_i: in nsl_amba.axi4_stream.slave_t;
+
+      -- Output reports, one last-delimited frame each, configured as
+      -- report_cfg_c.  Only a program that sends output reports (see
+      -- hid_program) ever releases the buffered one.
+      --
+      -- The engine buffers one report.  Ready is high whenever no
+      -- report is pending, so a whole report is taken at one byte per
+      -- cycle, and is low from the cycle after its last byte until the
+      -- report is released: acknowledged by the device, answered with
+      -- a STALL, or dropped because the enumerated device went away.
+      -- A report taken while no device is enumerated waits for the
+      -- next one.  A report longer than output_report_length_max_c is
+      -- swallowed whole and dropped.  status_o.output_dropped pulses
+      -- for every drop.
+      output_report_i: in nsl_amba.axi4_stream.master_t
+        := nsl_amba.axi4_stream.transfer_defaults(report_cfg_c);
+      output_report_o: out nsl_amba.axi4_stream.slave_t
       );
   end component;
 

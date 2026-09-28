@@ -59,9 +59,18 @@ use nsl_data.bytestream.all;
 --   and cleared when a packet with any PID other than NAK or STALL is
 --   received, so a receive that times out with no response reads as
 --   NAKed.  The ERR flag (BERR) is cleared by START and set when a
---   packet has a framing error, times out, or fails CRC16. SAVE copies
---   descriptor bytes from the current packet
---   to the identity registers defined in the hid_host package.
+--   packet has a framing error, times out, or fails CRC16. The STALL
+--   flag (BSTALL) is cleared by START and set when the packet received
+--   is a STALL handshake. SAVE copies descriptor bytes from the
+--   current packet to the identity registers defined in the hid_host
+--   package.
+--
+-- * An output report buffer, filled from outside the machine, holds at
+--   most one report at a time.  It is pending from the moment its last
+--   byte is written until OCTL releases it.  OUTR transmits it as the
+--   body of a data packet, and a single-bit data toggle, flipped by
+--   OCTL when the device acknowledged the report, selects the DATA0 or
+--   DATA1 PID it goes out with.
 package ukp is
 
   type opcode_t is (
@@ -144,11 +153,34 @@ package ukp is
     -- A short packet ends the transfer, using bMaxPacketSize0 saved
     -- from the device descriptor. Only execute after successful IN.
     UKP_BMORE,
+    -- Transmit the body of a data packet carrying the pending output
+    -- report, NRZI encoded and bit stuffed like OUTB, continuing from
+    -- the SYNC byte that must precede it: the DATA0 or DATA1 PID the
+    -- output data toggle selects, the report bytes, then their CRC16.
+    -- The instruction holds until its last byte is handed to the
+    -- serializer.  With no report pending, the packet is a zero-length
+    -- one.
+    UKP_OUTR,
+    -- Branch if an output report is pending.
+    UKP_BOUT,
+    -- Branch if the last receive attempt got a STALL handshake.
+    UKP_BSTALL,
+    -- Output report bookkeeping, by operand: octl_acked_c releases the
+    -- pending report and flips the data toggle, octl_dropped_c
+    -- releases it without flipping the toggle and signals the loss,
+    -- octl_toggle_reset_c sets the toggle back to DATA0.  Releasing is
+    -- a no-op when no report is pending.
+    UKP_OCTL,
     -- Pseudo-instruction defining a label position.  Emits nothing.
     UKP_LABEL
     );
 
   subtype label_t is natural range 0 to 63;
+
+  -- OCTL operands.
+  constant octl_acked_c: natural := 0;
+  constant octl_dropped_c: natural := 1;
+  constant octl_toggle_reset_c: natural := 2;
 
   type instruction_t is
   record
@@ -188,6 +220,12 @@ package ukp is
   function speed_sense return program_t;
   function bfs(l: label_t) return program_t;
   function sof(half: natural range 0 to 1) return program_t;
+  function out_report return program_t;
+  function bout(l: label_t) return program_t;
+  function bstall(l: label_t) return program_t;
+  function out_report_acked return program_t;
+  function out_report_dropped return program_t;
+  function out_toggle_reset return program_t;
   function nop return program_t;
 
   -- 16-bit instruction word: opcode_encode() of the opcode in bits
@@ -361,6 +399,36 @@ package body ukp is
     return single(UKP_SOF, half);
   end function;
 
+  function out_report return program_t is
+  begin
+    return single(UKP_OUTR, 0);
+  end function;
+
+  function bout(l: label_t) return program_t is
+  begin
+    return single(UKP_BOUT, l);
+  end function;
+
+  function bstall(l: label_t) return program_t is
+  begin
+    return single(UKP_BSTALL, l);
+  end function;
+
+  function out_report_acked return program_t is
+  begin
+    return single(UKP_OCTL, octl_acked_c);
+  end function;
+
+  function out_report_dropped return program_t is
+  begin
+    return single(UKP_OCTL, octl_dropped_c);
+  end function;
+
+  function out_toggle_reset return program_t is
+  begin
+    return single(UKP_OCTL, octl_toggle_reset_c);
+  end function;
+
   function nop return program_t is
   begin
     return single(UKP_NOP, 0);
@@ -370,6 +438,9 @@ package body ukp is
   begin
     assert op /= UKP_LABEL
       report "UKP_LABEL has no encoding"
+      severity failure;
+    assert opcode_t'pos(op) < 32
+      report "Opcode " & opcode_t'image(op) & " does not fit in five bits"
       severity failure;
     return std_ulogic_vector(to_unsigned(opcode_t'pos(op), 5));
   end function;
@@ -389,7 +460,7 @@ package body ukp is
   begin
     case op is
       when UKP_BZ | UKP_BC | UKP_BNAK | UKP_BERR | UKP_BFS | UKP_BMORE
-        | UKP_DJNZ | UKP_JMP | UKP_CALL =>
+        | UKP_BOUT | UKP_BSTALL | UKP_DJNZ | UKP_JMP | UKP_CALL =>
         return true;
       when others =>
         return false;
