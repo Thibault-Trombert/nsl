@@ -23,6 +23,9 @@ projects:
   - name: tang_25k_hdmi
     path: sipeed_tang_25k/hdmi
     tags: [gowin, tang_25k]
+  - name: tang_25k_spdif_sine
+    path: sipeed_tang_25k/spdif_sine
+    tags: [gowin, tang_25k]
   - name: tang_console_60k_dvi_terminal
     path: sipeed_tang_console_60k/dvi_terminal
     tags: [gowin, tang_console_60k]
