@@ -19,6 +19,7 @@ backend-agnostic implementations.
    nsl_data/index
    nsl_clocking/index
    nsl_io/index
+   nsl_hwconfig/index
    nsl_color/index
    nsl_event/index
    debug

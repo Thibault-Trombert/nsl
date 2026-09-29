@@ -1,3 +1,5 @@
+packages += memory_config
+
 ifneq ($(filter xilinx,$(hwdep)),)
 ifneq ($(filter xc6%,$(target_part)),)
 packages += xc6_config
