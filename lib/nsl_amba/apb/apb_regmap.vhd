@@ -24,7 +24,10 @@ entity apb_regmap is
     w_value_o : out unsigned(8*(2**config_c.data_bus_width_l2)-1 downto 0);
     w_strobe_o : out std_ulogic;
     r_value_i : in unsigned(8*(2**config_c.data_bus_width_l2)-1 downto 0);
-    r_strobe_o : out std_ulogic
+    r_strobe_o : out std_ulogic;
+
+    w_ready_i : in std_ulogic := '1';
+    r_valid_i : in std_ulogic := '1'
     );
 end entity;
 
@@ -53,11 +56,11 @@ begin
       w_mask_o => w_mask_s,
       w_valid_o => w_strobe_o,
       w_error_i => w_error_s,
-      w_ready_i => '1',
+      w_ready_i => w_ready_i,
 
       r_data_i => r_data_s,
       r_ready_o => r_strobe_o,
-      r_valid_i => '1'
+      r_valid_i => r_valid_i
       );
 
   reg_no_o <= to_integer(address_s(address_s'right+reg_count_l2_c-1 downto address_s'right));

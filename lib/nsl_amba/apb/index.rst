@@ -66,7 +66,9 @@ interfaces.
 
   * Allows for a limited address space,
   * Limits to a set of full data width registers,
-  * Only uses combinatorial reads.
+  * Uses combinatorial reads, unless the backend holds the access
+    with ``r_valid_i`` or ``w_ready_i`` (wait states, e.g. for a
+    register window backed by block RAM).
 
   This is mostly useful for small register maps.
 
