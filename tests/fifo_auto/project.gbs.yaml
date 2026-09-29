@@ -1,0 +1,23 @@
+name: fifo_auto
+
+root:
+  name: top
+  deps:
+    - nsl_memory.fifo
+    - nsl_hwconfig.memory_config
+    - nsl_data.prbs
+    - nsl_data.text
+    - nsl_simulation.assertions
+    - nsl_simulation.logging
+    - nsl_simulation.driver
+  sources:
+    - file_type: vhdl
+      files:
+        - src/tb.vhd
+
+output:
+  - name: simulation
+    topcell: tb
+    outputs:
+      - type: simulation-log
+        path: simulation.log

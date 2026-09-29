@@ -9,6 +9,7 @@ vhdl-sources += fifo_narrower.vhd
 vhdl-sources += fifo_cancellable.vhd
 vhdl-sources += fifo_widener.vhd
 vhdl-sources += fifo_count.vhd
+vhdl-sources += fifo_auto.vhd
 
 deps += nsl_clocking.intradomain
 deps += nsl_clocking.interdomain
@@ -18,3 +19,4 @@ deps += nsl_math.gray
 deps += nsl_memory.ram
 deps += nsl_memory.streamer
 deps += nsl_logic.bool
+deps += nsl_hwconfig.memory_config

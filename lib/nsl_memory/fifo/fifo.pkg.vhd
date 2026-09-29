@@ -2,10 +2,132 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+library nsl_hwconfig;
+
 package fifo is
+
+  -- What fifo_auto has to provide. Build it with fifo_config().
+  type fifo_config_t is
+  record
+    data_width: natural;
+    word_count: positive;
+    clock_count: natural range 1 to 2;
+    -- Register slices on the ports, see fifo_homogeneous.
+    input_slice: boolean;
+    output_slice: boolean;
+    -- Fill counters are meaningful. Only then, register_counters
+    -- matters.
+    counters: boolean;
+    register_counters: boolean;
+    -- Commit/rollback on either side, see fifo_homogeneous.
+    in_cancellable: boolean;
+    out_cancellable: boolean;
+  end record;
+
+  function fifo_config(
+    data_width: natural;
+    word_count: positive;
+    clock_count: natural range 1 to 2 := 1;
+    input_slice: boolean := false;
+    output_slice: boolean := false;
+    counters: boolean := false;
+    register_counters: boolean := false;
+    in_cancellable: boolean := false;
+    out_cancellable: boolean := false) return fifo_config_t;
+
+  type fifo_implementation_t is (
+    FIFO_IMPLEMENTATION_SHIFT_REGISTER,
+    FIFO_IMPLEMENTATION_LUTRAM,
+    FIFO_IMPLEMENTATION_HOMOGENEOUS
+    );
+
+  -- Data bits (word_count * data_width) up to which fifo_auto keeps
+  -- words in fifo_shift_register rather than in memory, depending on
+  -- whether the target has LUT RAM. Shift register cost grows with
+  -- stored bits, the other ones mostly have a fixed cost: LUT RAM
+  -- primitives are 64 bits large, and fifo_homogeneous carries a few
+  -- words of prefetch registers and control logic beside its memory.
+  constant fifo_auto_shift_register_bits_lutram_c: natural := 16;
+  constant fifo_auto_shift_register_bits_no_lutram_c: natural := 64;
+
+  -- Implementation fifo_auto selects for a configuration on a target
+  -- with given LUT RAM resources, first matching rule wins:
+  --
+  -- 1. fifo_homogeneous if clock_count is 2, or if counters or
+  --    cancellation on either side are requested: no other block has
+  --    them;
+  --
+  -- 2. fifo_shift_register if word_count is at most 2, or if
+  --    word_count is at most 16 and word_count * data_width is at
+  --    most fifo_auto_shift_register_bits_lutram_c (target with LUT
+  --    RAM) or fifo_auto_shift_register_bits_no_lutram_c (target
+  --    without);
+  --
+  -- 3. fifo_lutram if the target has LUT RAM with asynchronous read
+  --    and word_count is at most its fifo_depth_max;
+  --
+  -- 4. fifo_homogeneous otherwise, for block RAM.
+  function fifo_auto_implementation(
+    config: fifo_config_t;
+    lutram: nsl_hwconfig.memory_config.lutram_t) return fifo_implementation_t;
+
+  -- Fifo whose implementation is picked at elaboration,
+  -- by fifo_auto_implementation() against the LUT RAM resources of the
+  -- target (nsl_hwconfig.memory_config), as the cheapest block that
+  -- provides everything config_c asks for. Features that are not asked
+  -- for cost nothing.
+  --
+  -- Ports and their meaning are the ones of fifo_homogeneous.
+  -- Whatever the implementation:
+  --
+  -- - words come out in the order they went in, none is lost or
+  --   duplicated;
+  --
+  -- - capacity is at least word_count, exactly word_count without
+  --   slices, each slice adding up to two words;
+  --
+  -- - a word is presented on the output at least one cycle after it
+  --   was accepted.
+  --
+  -- Latency and exact ready/valid timing differ between
+  -- implementations, hence between targets. Designs may only rely on
+  -- the handshake. In particular, simulation without a target vendor
+  -- selects as a typical target with LUT RAM does, see
+  -- nsl_hwconfig.memory_config.
+  --
+  -- Counter outputs are only meaningful when config_c.counters is set.
+  -- Commit and rollback inputs are ignored on a side that is not
+  -- cancellable.
+  component fifo_auto is
+    generic(
+      config_c: fifo_config_t
+      );
+    port(
+      reset_n_i: in std_ulogic;
+      clock_i: in std_ulogic_vector(0 to config_c.clock_count-1);
+
+      out_data_o: out std_ulogic_vector(config_c.data_width-1 downto 0);
+      out_ready_i: in std_ulogic;
+      out_valid_o: out std_ulogic;
+      out_commit_i: in std_ulogic := '1';
+      out_rollback_i: in std_ulogic := '0';
+      out_available_min_o: out integer range 0 to config_c.word_count;
+      out_available_o: out integer range 0 to config_c.word_count+1;
+
+      in_data_i: in std_ulogic_vector(config_c.data_width-1 downto 0);
+      in_valid_i: in std_ulogic;
+      in_ready_o: out std_ulogic;
+      in_commit_i: in std_ulogic := '1';
+      in_rollback_i: in std_ulogic := '0';
+      in_free_o: out integer range 0 to config_c.word_count
+      );
+  end component;
 
   -- Fifo backed by a dual-port memory, with an optional second clock
   -- domain on the output side.
+  --
+  -- New code should use fifo_auto, which falls back to this one only
+  -- for what cheaper blocks cannot do.
   --
   -- Either side may be made cancellable through its *_cancellable_c
   -- generic. A cancellable side hands its beats over speculatively:
@@ -110,11 +232,16 @@ package fifo is
   end component;
 
   -- Shallow FIFO made of shifting registers steered by a one-hot fill
-  -- register. Cheaper than fifo_homogeneous for depths of a few
-  -- words, at the price of moving every stored word on each pop.
+  -- register. Cheapest for one or two words, or for a few narrow
+  -- words, at the price of moving every stored word on each pop. For
+  -- anything wider or deeper, see fifo_lutram, or let fifo_auto
+  -- choose.
+  --
   -- Handshake is fully registered: in_ready_o and out_valid_o only
   -- depend on internal state, there is no combinational path between
-  -- the input and the output port.
+  -- the input and the output port. A word pushed on a cycle is
+  -- presented on the next one. A full fifo refuses a push even when a
+  -- pop takes place on the same cycle.
   component fifo_shift_register is
     generic(
       data_width_c: natural;
@@ -307,3 +434,65 @@ package fifo is
   end component;
 
 end package fifo;
+
+package body fifo is
+
+  function fifo_config(
+    data_width: natural;
+    word_count: positive;
+    clock_count: natural range 1 to 2 := 1;
+    input_slice: boolean := false;
+    output_slice: boolean := false;
+    counters: boolean := false;
+    register_counters: boolean := false;
+    in_cancellable: boolean := false;
+    out_cancellable: boolean := false) return fifo_config_t
+  is
+  begin
+    return fifo_config_t'(
+      data_width => data_width,
+      word_count => word_count,
+      clock_count => clock_count,
+      input_slice => input_slice,
+      output_slice => output_slice,
+      counters => counters,
+      register_counters => register_counters,
+      in_cancellable => in_cancellable,
+      out_cancellable => out_cancellable);
+  end function;
+
+  function fifo_auto_implementation(
+    config: fifo_config_t;
+    lutram: nsl_hwconfig.memory_config.lutram_t) return fifo_implementation_t
+  is
+    variable shift_register_bits: natural;
+  begin
+    if config.clock_count /= 1
+      or config.counters
+      or config.in_cancellable
+      or config.out_cancellable then
+      return FIFO_IMPLEMENTATION_HOMOGENEOUS;
+    end if;
+
+    if lutram.present then
+      shift_register_bits := fifo_auto_shift_register_bits_lutram_c;
+    else
+      shift_register_bits := fifo_auto_shift_register_bits_no_lutram_c;
+    end if;
+
+    if config.word_count <= 2
+      or (config.word_count <= 16
+          and config.word_count * config.data_width <= shift_register_bits) then
+      return FIFO_IMPLEMENTATION_SHIFT_REGISTER;
+    end if;
+
+    if lutram.present
+      and lutram.async_read
+      and config.word_count <= lutram.fifo_depth_max then
+      return FIFO_IMPLEMENTATION_LUTRAM;
+    end if;
+
+    return FIFO_IMPLEMENTATION_HOMOGENEOUS;
+  end function;
+
+end package body fifo;

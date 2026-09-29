@@ -305,6 +305,9 @@ projects:
   - name: fifo_paced
     path: fifo_paced
     tags: [ghdl, simulation]
+  - name: fifo_auto
+    path: fifo_auto
+    tags: [ghdl, simulation]
   - name: fifo_lutram
     path: fifo_lutram
     tags: [ghdl, simulation]
