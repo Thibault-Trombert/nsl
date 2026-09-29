@@ -4,6 +4,45 @@ RAM blocks
 
 Various RAM blocks are available.
 
+Choosing a RAM
+==============
+
+For a memory with one write port and one read port on one clock,
+`ram_auto`_ is the RAM new code should instantiate.  It keeps a small
+memory in LUT RAM and a larger one in block RAM, picking at
+elaboration from the LUT RAM the target has (see
+``nsl_hwconfig.memory_config``) and the memory's size:
+
+- LUT RAM if the target has LUT RAM with an asynchronous read port and
+  the memory takes at most ``lutram_primitives_max_c`` of its
+  primitives, ``ceil(words / depth) * ceil(width / width)`` for the
+  primitive geometry the target reports.  The default,
+  ``ram_auto_lutram_primitives_max_c``, is 16: 1 kbit of Gowin SSRAM
+  or Lattice DPR16X4, 3 kbit of Xilinx RAM32M;
+
+- block RAM otherwise, through `ram_2p_homogeneous`_.
+
+Setting ``lutram_primitives_max_c`` to zero forces block RAM, a large
+value LUT RAM where the target has some.  The rule is available as
+``ram_auto_implementation()`` for code or tests that need to know the
+outcome.
+
+Read latency is the same whatever the implementation, the one of
+`ram_2p_r_w`_ with the same ``registered_output_c``: one cycle, or
+two with the registered output.  The LUT RAM implementation reads its
+array asynchronously and registers the result once or twice to match.
+Words may be split in lanes, each with its own write enable.  Reading
+a word on the edge it is written returns undefined data.
+
+On Gowin, the LUT RAM implementation carries a ``syn_ramstyle``
+attribute: without it, Gowin synthesis moves arrays of 32 words or
+more to block RAM whenever a register sits next to them.  Block RAM
+lanes take one BSRAM each there, however shallow the memory.
+
+.. _ram_auto:
+
+.. vhdl:autocomponent:: nsl_memory.ram.ram_auto
+
 Single-port single word RAM
 ===========================
 
