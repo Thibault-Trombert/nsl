@@ -503,6 +503,9 @@ projects:
   - name: nco
     path: nco
     tags: [ghdl, simulation]
+  - name: ram_auto
+    path: ram_auto
+    tags: [ghdl, simulation]
   - name: ublox_nav_timegps
     path: ublox/nav_timegps
     tags: [ghdl, simulation]

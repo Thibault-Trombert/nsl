@@ -8,4 +8,6 @@ vhdl-sources += ram_2p_homogeneous.vhd
 endif
 vhdl-sources += ram_2p_r_w.vhd
 vhdl-sources += ram_2p.vhd
+vhdl-sources += ram_auto.vhd
 deps += nsl_math.arith
+deps += nsl_hwconfig.memory_config
