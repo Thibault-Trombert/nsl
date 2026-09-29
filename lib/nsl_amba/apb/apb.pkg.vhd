@@ -318,7 +318,9 @@ package apb is
       -- Read is required
       r_ready_o : out std_ulogic;
       -- Read got served
-      r_valid_i : in std_ulogic := '1'
+      r_valid_i : in std_ulogic := '1';
+      -- Read error response (SLVERR), taken with r_valid_i
+      r_error_i : in std_ulogic := '0'
       );
   end component;
 
@@ -369,7 +371,9 @@ package apb is
       -- stable, the bus transfer being held.  Left open, both are
       -- asserted: every access completes on its first strobe cycle.
       w_ready_i : in std_ulogic := '1';
-      r_valid_i : in std_ulogic := '1'
+      r_valid_i : in std_ulogic := '1';
+      -- Read error: taken with r_valid_i, the read answers SLVERR.
+      r_error_i : in std_ulogic := '0'
       );
   end component;
 

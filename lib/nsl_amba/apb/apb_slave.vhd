@@ -29,7 +29,8 @@ entity apb_slave is
 
     r_data_i : in byte_string(0 to 2**config_c.data_bus_width_l2-1);
     r_ready_o : out std_ulogic;
-    r_valid_i : in std_ulogic := '1'
+    r_valid_i : in std_ulogic := '1';
+    r_error_i : in std_ulogic := '0'
     );
 end entity;
 
@@ -41,6 +42,7 @@ architecture rtl of apb_slave is
     write_transaction: boolean;
     serviced_early: boolean;
     werror: boolean;
+    rerror: boolean;
     rdata: byte_string(0 to 2**config_c.data_bus_width_l2-1);
   end record;
 
@@ -59,7 +61,7 @@ begin
     end if;
   end process;
 
-  transition: process(r, apb_i, r_data_i, r_valid_i, w_ready_i, w_error_i, r_data_i)
+  transition: process(r, apb_i, r_data_i, r_valid_i, r_error_i, w_ready_i, w_error_i)
   begin
     rin <= r;
 
@@ -76,6 +78,7 @@ begin
         if r_valid_i = '1' then
           rin.serviced_early <= true;
           rin.rdata <= r_data_i;
+          rin.rerror <= r_error_i = '1';
         end if;
       end if;
     elsif is_access(config_c, apb_i) then
@@ -94,11 +97,12 @@ begin
       rin.access_phase <= false;
       rin.serviced_early <= false;
       rin.werror <= false;
+      rin.rerror <= false;
       rin.rdata <= (others => dontcare_byte_c);
     end if;
   end process;
 
-  mealy: process(r, apb_i, r_data_i, r_valid_i, w_ready_i, w_error_i, r_data_i) is
+  mealy: process(r, apb_i, r_data_i, r_valid_i, r_error_i, w_ready_i, w_error_i) is
   begin
     address_o <= resize(address(config_c, apb_i, config_c.data_bus_width_l2), address_o'length);
     w_data_o <= bytes(config_c, apb_i);
@@ -113,10 +117,13 @@ begin
     if r.access_phase then
       if not r.write_transaction then
         if r.serviced_early then
-          apb_o <= read_response(config_c, bytes => r.rdata, ready => true);
+          apb_o <= read_response(config_c, bytes => r.rdata,
+                                 error => r.rerror, ready => true);
           r_ready_o <= '0';
         else
-          apb_o <= read_response(config_c, bytes => r_data_i, ready => r_valid_i = '1');
+          apb_o <= read_response(config_c, bytes => r_data_i,
+                                 error => r_error_i = '1',
+                                 ready => r_valid_i = '1');
           r_ready_o <= '1';
         end if;
       else

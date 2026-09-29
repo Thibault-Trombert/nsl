@@ -27,7 +27,8 @@ entity apb_regmap is
     r_strobe_o : out std_ulogic;
 
     w_ready_i : in std_ulogic := '1';
-    r_valid_i : in std_ulogic := '1'
+    r_valid_i : in std_ulogic := '1';
+    r_error_i : in std_ulogic := '0'
     );
 end entity;
 
@@ -60,7 +61,8 @@ begin
 
       r_data_i => r_data_s,
       r_ready_o => r_strobe_o,
-      r_valid_i => r_valid_i
+      r_valid_i => r_valid_i,
+      r_error_i => r_error_i
       );
 
   reg_no_o <= to_integer(address_s(address_s'right+reg_count_l2_c-1 downto address_s'right));

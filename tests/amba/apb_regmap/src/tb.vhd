@@ -23,7 +23,8 @@ architecture arch of tb is
   signal bus_s: bus_t;
 
   constant config_c : config_t := config(address_width => 32,
-                                         data_bus_width => 32);
+                                         data_bus_width => 32,
+                                         err => true);
 
 begin
 
@@ -53,6 +54,12 @@ begin
     apb_check(config_c, clock_s, bus_s.s, bus_s.m, reg => 5, reg_lsb => 2, val => x"00000002");
     apb_check(config_c, clock_s, bus_s.s, bus_s.m, reg => 6, reg_lsb => 2, val => x"00000008");
     apb_check(config_c, clock_s, bus_s.s, bus_s.m, reg => 0, reg_lsb => 2, val => x"00010203");
+
+    -- Read errors: register 7 answers one at once, register 8 after
+    -- three wait states.
+    apb_check(config_c, clock_s, bus_s.s, bus_s.m, reg => 7, reg_lsb => 2, err => true);
+    apb_check(config_c, clock_s, bus_s.s, bus_s.m, reg => 8, reg_lsb => 2, err => true);
+    apb_check(config_c, clock_s, bus_s.s, bus_s.m, reg => 0, reg_lsb => 2, val => x"00010203");
     
     done_s(0) <= '1';
     wait;
@@ -61,7 +68,7 @@ begin
   regmap: block is
     signal reg_no_s: natural range 0 to 15;
     signal w_value_s, r_value_s : unsigned(31 downto 0);
-    signal w_strobe_s, r_strobe_s, w_ready_s, r_valid_s : std_ulogic;
+    signal w_strobe_s, r_strobe_s, w_ready_s, r_valid_s, r_error_s : std_ulogic;
     signal held_s : natural range 0 to 3;
     signal reg3: unsigned(31 downto 0);
     signal reg3_writes, reg3_strobes, reg3_view: unsigned(31 downto 0);
@@ -109,7 +116,8 @@ begin
     end process;
 
     w_ready_s <= '0' when reg_no_s = 3 and held_s /= 3 else '1';
-    r_valid_s <= '0' when reg_no_s = 4 and held_s /= 3 else '1';
+    r_valid_s <= '0' when (reg_no_s = 4 or reg_no_s = 8) and held_s /= 3 else '1';
+    r_error_s <= '1' when reg_no_s = 7 or reg_no_s = 8 else '0';
     reg3_view <= reg3 when held_s = 3 else x"badbad00";
 
     with reg_no_s select r_value_s <=
@@ -139,7 +147,8 @@ begin
         w_ready_i => w_ready_s,
         r_value_i => r_value_s,
         r_strobe_o => r_strobe_s,
-        r_valid_i => r_valid_s
+        r_valid_i => r_valid_s,
+        r_error_i => r_error_s
         );
   end block;  
 
