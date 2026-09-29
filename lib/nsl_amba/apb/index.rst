@@ -69,6 +69,9 @@ interfaces.
   * Uses combinatorial reads, unless the backend holds the access
     with ``r_valid_i`` or ``w_ready_i`` (wait states, e.g. for a
     register window backed by block RAM).
+  * Answers SLVERR to a write narrower than the data bus, and to a
+    read the backend refuses with ``r_error_i`` (taken with
+    ``r_valid_i``), when the bus configuration has errors.
 
   This is mostly useful for small register maps.
 
