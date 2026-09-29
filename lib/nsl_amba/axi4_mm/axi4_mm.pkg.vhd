@@ -641,8 +641,17 @@ package axi4_mm is
       -- serialized to the bus using the relevant endianness
       r_value_i : in unsigned(8*(2**config_c.data_bus_width_l2)-1 downto 0);
       -- r_value_i must be asserted on the interface the cycle
-      -- r_strobe_o is asserted.
-      r_strobe_o : out std_ulogic
+      -- r_strobe_o is asserted, or with r_valid_i, see below.
+      r_strobe_o : out std_ulogic;
+
+      -- Wait states.  A write is taken on a cycle w_strobe_o and
+      -- w_ready_i are both asserted, a read on a cycle r_strobe_o
+      -- and r_valid_i are both asserted, r_value_i being sampled
+      -- then.  Until then, the strobe stays asserted and reg_no_o
+      -- stable, the bus transfer being held.  Left open, both are
+      -- asserted: every access completes on its first strobe cycle.
+      w_ready_i : in std_ulogic := '1';
+      r_valid_i : in std_ulogic := '1'
       );
   end component;
 
