@@ -139,6 +139,42 @@ package fifo is
       );
   end component;
 
+  -- Single-clock FIFO over a memory array written synchronously and
+  -- read asynchronously, which synthesizers map to LUT RAM where the
+  -- target has some, to registers and a read multiplexer otherwise.
+  -- Any depth, a power of two saves a comparison per index.
+  --
+  -- Same port contract as fifo_shift_register, cycle for cycle:
+  -- in_ready_o and out_valid_o are registered, a word pushed on a
+  -- cycle is presented on the next one, a full fifo refuses a push
+  -- even when a pop takes place on the same cycle. out_data_o is the
+  -- head word read from the array with no clock edge in between: it
+  -- goes through the LUT RAM read path, not straight out of a
+  -- register.
+  component fifo_lutram is
+    generic(
+      data_width_c: natural;
+      word_count_c: positive
+      );
+    port(
+      reset_n_i: in std_ulogic;
+      clock_i: in std_ulogic;
+
+      in_data_i: in std_ulogic_vector(data_width_c-1 downto 0);
+      in_valid_i: in std_ulogic;
+      in_ready_o: out std_ulogic;
+
+      out_data_o: out std_ulogic_vector(data_width_c-1 downto 0);
+      out_valid_o: out std_ulogic;
+      out_ready_i: in std_ulogic;
+
+      -- Registered one-hot fill level. fill_o(k) is set when the FIFO
+      -- holds k words. Costs word_count_c+1 registers if connected,
+      -- nothing if left open.
+      fill_o: out std_ulogic_vector(0 to word_count_c)
+      );
+  end component;
+
   component fifo_pointer is
     generic(
       ptr_width_c         : natural;
