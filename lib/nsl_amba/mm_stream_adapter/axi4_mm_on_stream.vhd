@@ -438,7 +438,8 @@ begin
       packed_s.s <= accept(packed_cfg, is_ready(mm_config_c, slave_i.r));
       slave_o.r <= read_data_vector_unpack(
         mm_config_c, v,
-        valid => is_valid(packed_cfg, packed_s.m));
+        valid => is_valid(packed_cfg, packed_s.m),
+        last => is_last(packed_cfg, packed_s.m));
 
       adapter: nsl_amba.axi4_stream.axi4_stream_width_adapter
         generic map(
