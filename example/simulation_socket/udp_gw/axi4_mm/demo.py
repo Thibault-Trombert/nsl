@@ -11,7 +11,8 @@ from acrobe.root import root
 
 class Demo:
     AXI_PATH = "udp/{host}:4250/nsl_axi4_mm(id_width=2,max_length=16,burst=1)"
-    APB_PATH = "udp/{host}:4251"
+    APB_PATH = ("udp/{host}:4251/nsl_apb(address_width=16,"
+                "data_bus_width=32,burst_length_l2=4)")
 
     def __init__(self, host):
         self.host = host
@@ -34,21 +35,19 @@ class Demo:
                    edges == pattern[:2] + b"\xa5" + pattern[3:4])
 
     async def apb(self):
-        dg = await root(self.APB_PATH.format(host=self.host))
-        print(f"APB: {dg.fqdn}")
+        bus = await root(self.APB_PATH.format(host=self.host))
+        print(f"APB: {bus.fqdn}")
+        print(f"  identify: {await bus.identify()!r}")
 
-        await dg.send(bytes([0xff, 0x00]))
-        rsp, _ = await dg.recv()
-        print(f"  identify: {rsp[:-1]!r}, status {rsp[-1]}")
+        await bus.write32(0x40, 0xcafef00d)
+        print(f"  read32(0x40) = {await bus.read32(0x40):#010x}")
 
-        words = bytes(range(16))
-        await dg.send(bytes([0x00, 0x40, 0x00]) + words)
-        rsp, _ = await dg.recv()
-        self.check("APB write status", rsp == b"\x00")
-
-        await dg.send(bytes([0x80, 0x40, 0x00, 0x03]))
-        rsp, _ = await dg.recv()
-        self.check("APB read back", rsp == words + b"\x00")
+        pattern = os.urandom(1024)
+        await bus.mem_write(0x100, pattern)
+        back = await bus.mem_read(0x100, len(pattern))
+        self.check("1024 bytes at 0x100", back == pattern)
+        self.check("unaligned read inside",
+                   await bus.mem_read(0x103, 6) == pattern[3:9])
 
     @staticmethod
     def check(what, ok):

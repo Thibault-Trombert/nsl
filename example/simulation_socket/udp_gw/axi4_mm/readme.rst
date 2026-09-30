@@ -109,13 +109,36 @@ datagrams ``01 00 01 00 00 08 02`` and ``04 11 22 33 44 0f``, answered by
 Driving the APB port
 --------------------
 
-``apb_stream_bridge`` takes one command per datagram, multi-byte fields
-little-endian, and answers one datagram ending with a status byte (bit
-0 is an error):
+From acrobe, the path is::
 
-* identify ``ff 00`` returns ``apb_ram``;
-* read ``80``, 2 address bytes, 1 byte of word count - 1, returns the
-  words;
-* write ``00``, 2 address bytes, whole words.
+  udp/127.0.0.1:4251/nsl_apb(address_width=16,data_bus_width=32,burst_length_l2=4)
 
-``demo.py`` uses the raw acrobe datagram at ``udp/127.0.0.1:4251``.
+The three options are required and must match the bridge's generics
+(``apb_config_c`` address and data widths, ``burst_length_l2_c``), as
+they define field widths on the wire. Host-side options are
+``max_write`` (words per write command), ``window`` and ``timeout``.
+The node is an acrobe memory bus (``mem_read`` of any length and
+alignment, ``mem_write`` of whole aligned words, ``read8/16/32``,
+``write32``) with an ``identify()`` method. The bridge has no byte
+strobes: a partial-word write is refused rather than turned into a
+read-modify-write.
+
+A client in another language sends one command per datagram,
+multi-byte fields little-endian, and gets one datagram back ending with
+a status byte (bit 0: PSLVERR on one of the command's transfers, or a
+malformed command):
+
+* identify ``ff`` returns ``apb_ram``, then the status;
+* read ``80``, 2 address bytes, 1 byte of word count - 1 (up to 15),
+  returns the words, then the status;
+* write ``00``, 2 address bytes, whole words, returns the status.
+
+For instance, writing ``00 11 22 33`` then ``44 55 66 77`` at 0x40 is
+``00 40 00 00 11 22 33 44 55 66 77``, answered by ``00``; reading them
+back is ``80 40 00 01``, answered by ``00 11 22 33 44 55 66 77 00``.
+
+The bridge answers commands one at a time, in order, with nothing in
+an answer naming its command: a client matches answers to commands in
+order. The count keeps ``burst_length_l2_c`` bits, so a larger count
+wraps. A failing transfer does not stop the command, the other words
+are still moved.
