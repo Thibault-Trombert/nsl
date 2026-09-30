@@ -51,6 +51,9 @@ projects:
   - name: simulation_socket_udp_gw_swd_transactor
     path: simulation_socket/udp_gw/swd_transactor
     tags: [socket]
+  - name: simulation_socket_udp_gw_axi4_mm
+    path: simulation_socket/udp_gw/axi4_mm
+    tags: [socket]
   - name: simulation_socket_spi_cbor_udp_server
     path: simulation_socket/spi_cbor/udp_server
     tags: [socket]
