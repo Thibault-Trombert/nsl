@@ -6,6 +6,7 @@ root:
     - nsl_video.mode
     - nsl_video.pixel_stream
     - nsl_color.rgb
+    - nsl_color.ycbcr
     - nsl_simulation.control
     - nsl_data.text
   sources:
