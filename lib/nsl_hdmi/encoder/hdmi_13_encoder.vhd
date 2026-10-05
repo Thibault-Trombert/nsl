@@ -106,7 +106,7 @@ architecture beh of hdmi_13_encoder is
     bch: di_bch_t;
   end record;
 
-  constant video_info_di_c : data_island_t := di_avi_rgb;
+  constant video_info_di_c : data_island_t := di_avi(config_c);
   
   function di_subpacket_ingress(di: data_island_t;
                                 index: natural range 0 to 3) return subpacket_t

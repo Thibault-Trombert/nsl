@@ -19,6 +19,9 @@ package encoder is
   -- Channel map follows the stream colorspace unless stated, see
   -- nsl_dvi.encoder.channel_map_resolve.  A stream with no channel
   -- map (indexed, gray, YCbCr 4:2:2) fails elaboration.
+  --
+  -- AVI infoframe states colorspace, colorimetry and quantization of
+  -- the stream configuration, see nsl_hdmi.hdmi.di_avi.
   component hdmi_13_encoder is
     generic(
       config_c : nsl_video.pixel_stream.config_t;
