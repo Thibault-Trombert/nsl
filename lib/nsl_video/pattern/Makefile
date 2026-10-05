@@ -1,4 +1,5 @@
 vhdl-sources += pattern.pkg.vhd
+vhdl-sources += color_bars.vhd
 vhdl-sources += rgb_color_bars.vhd
 vhdl-sources += ycbcr_color_bars.vhd
 
