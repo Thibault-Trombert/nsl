@@ -11,8 +11,8 @@ use nsl_data.bytestream.all;
 use nsl_indication.font.all;
 use nsl_indication.font_6x8.all;
 
--- Renders a static text screen through terminal_text_buffer into the
--- SSD1331 driver and checks every streamed pixel against a reference
+-- Renders a static text screen through terminal_text_buffer_colormap
+-- and palette_expander into the SSD1331 driver and checks every streamed pixel against a reference
 -- image computed from the font.
 entity tb is
 end entity;
@@ -59,7 +59,11 @@ architecture sim of tb is
 
   constant config_c : config_t := config(pixels => 1);
 
-  signal pixel_s : bus_t;
+  constant index_config_c : config_t
+    := config(pixels => 1, component_bits => 3, colorspace => COLORSPACE_INDEXED);
+  constant pixel_palette_c : pixel_vector(0 to 7) := palette(config_c, color_palette_c);
+
+  signal index_s, pixel_s : bus_t;
   signal synced_s : std_ulogic;
 
   signal write_s : std_ulogic;
@@ -134,17 +138,17 @@ begin
       synced_o => synced_s
       );
 
-  terminal: nsl_video.terminal.terminal_text_buffer
+  terminal: nsl_video.terminal.terminal_text_buffer_colormap
     generic map(
       row_count_l2_c => 3,
       column_count_l2_c => 4,
       character_count_l2_c => 8,
-      color_palette_c => color_palette_c,
+      color_count_l2_c => index_config_c.component_bits,
       font_c => font_6x8_c,
       underline_support_c => false,
       font_hscale_c => 1,
       font_vscale_c => 1,
-      config_c => config_c,
+      config_c => index_config_c,
       geometry_c => nsl_video.mode.geometry(nsl_solomonsystech.ssd1331.max_width_c,
                                             nsl_solomonsystech.ssd1331.max_height_c)
       )
@@ -152,8 +156,8 @@ begin
       video_clock_i => clock_s,
       video_reset_n_i => reset_n_s,
 
-      out_o => pixel_s.m,
-      out_i => pixel_s.s,
+      out_o => index_s.m,
+      out_i => index_s.s,
 
       term_clock_i => clock_s,
       term_reset_n_i => reset_n_s,
@@ -165,6 +169,24 @@ begin
       character_i => character_s,
       foreground_i => foreground_s,
       background_i => "000"
+      );
+
+  terminal_palette: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => config_c
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+
+      palette_i => pixel_palette_c,
+
+      in_i => index_s.m,
+      in_o => index_s.s,
+
+      out_o => pixel_s.m,
+      out_i => pixel_s.s
       );
 
   regs: process(clock_s, reset_n_s) is
