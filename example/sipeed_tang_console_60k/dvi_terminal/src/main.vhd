@@ -176,6 +176,14 @@ begin
           nsl_color.rgb.rgb24_blue,
           nsl_color.rgb.rgb24_white);
 
+    constant index_config_c : nsl_video.pixel_stream.config_t
+      := nsl_video.pixel_stream.config(pixels => 1,
+                                       component_bits => nsl_math.arith.log2(color_palette_c'length),
+                                       colorspace => nsl_video.pixel_stream.COLORSPACE_INDEXED);
+    constant pixel_palette_c : nsl_video.pixel_stream.pixel_vector(0 to color_palette_c'length-1)
+      := nsl_video.pixel_stream.palette(pixel_config_c, color_palette_c);
+    signal index_s : nsl_video.pixel_stream.bus_t;
+
     signal init_data_s: byte;
     signal init_valid_s: std_ulogic;
 
@@ -188,17 +196,17 @@ begin
 
     signal r, rin: regs_t;
   begin    
-    generator: nsl_video.terminal.terminal_text_buffer
+    generator: nsl_video.terminal.terminal_text_buffer_colormap
       generic map(
         row_count_l2_c => row_count_l2_c,
         column_count_l2_c => column_count_l2_c,
         character_count_l2_c => character_count_l2_c,
-        color_palette_c => color_palette_c,
+        color_count_l2_c => index_config_c.component_bits,
         font_c => font_c,
         underline_support_c => false,
         font_hscale_c => font_hscale_c,
         font_vscale_c => font_vscale_c,
-        config_c => pixel_config_c,
+        config_c => index_config_c,
         geometry_c => geometry_c
         )
       port map(
@@ -206,8 +214,8 @@ begin
         video_reset_n_i => dvi_pixel_clock_reset_n_s,
 
         video_enable_i => '1',
-        out_o => pixel_s.m,
-        out_i => pixel_s.s,
+        out_o => index_s.m,
+        out_i => index_s.s,
 
         term_clock_i => clock_i,
         term_reset_n_i => reset_n_i,
@@ -219,6 +227,24 @@ begin
         character_i => unsigned(init_data_s),
         foreground_i => term_fg_s,
         background_i => term_bg_s
+        );
+
+    generator_palette: nsl_video.colormap.palette_expander
+      generic map(
+        in_config_c => index_config_c,
+        out_config_c => pixel_config_c
+        )
+      port map(
+        clock_i => dvi_pixel_clock_s,
+        reset_n_i => dvi_pixel_clock_reset_n_s,
+
+        palette_i => pixel_palette_c,
+
+        in_i => index_s.m,
+        in_o => index_s.s,
+
+        out_o => pixel_s.m,
+        out_i => pixel_s.s
         );
 
     term_fg_s <= "11";
