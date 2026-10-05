@@ -14,6 +14,7 @@ root:
     - nsl_clocking.pll
     - nsl_dvi.transceiver
     - nsl_video.pattern
+    - nsl_video.colormap
     - nsl_hdmi.audio
     - nsl_hdmi.encoder
     - nsl_clocking.reset

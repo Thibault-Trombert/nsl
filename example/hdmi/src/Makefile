@@ -10,6 +10,7 @@ deps += nsl_clocking.pll
 deps += nsl_dvi.driver
 deps += nsl_dvi.transceiver
 deps += nsl_video.pattern
+deps += nsl_video.colormap
 deps += nsl_hdmi.audio
 deps += nsl_hdmi.encoder
 deps += nsl_clocking.reset
