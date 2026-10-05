@@ -153,7 +153,11 @@ package terminal is
       );
   end component;
 
-  -- Same as previous, with colormap lookup
+  -- Same as previous, with colormap lookup.
+  --
+  -- Deprecated: use terminal_labels_colormap followed by
+  -- nsl_video.colormap.palette_expander, with a palette computed by
+  -- nsl_video.pixel_stream.palette().
   component terminal_labels is
     generic(
       row_count_l2_c: positive;
@@ -272,7 +276,11 @@ package terminal is
       );
   end component;
 
-  -- Same as previous, with colormap lookup
+  -- Same as previous, with colormap lookup.
+  --
+  -- Deprecated: use terminal_text_buffer_colormap followed by
+  -- nsl_video.colormap.palette_expander, with a palette computed by
+  -- nsl_video.pixel_stream.palette().
   component terminal_text_buffer is
     generic(
       row_count_l2_c: positive;

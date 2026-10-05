@@ -52,6 +52,10 @@ architecture beh of terminal_labels is
 
 begin
 
+  assert false
+    report "This component is deprecated, move to nsl_video.terminal.terminal_labels_colormap and nsl_video.colormap.palette_expander"
+    severity warning;
+
   labels: work.terminal.terminal_labels_colormap
     generic map(
       row_count_l2_c => row_count_l2_c,

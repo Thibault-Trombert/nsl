@@ -73,6 +73,10 @@ architecture beh of terminal_text_buffer is
   signal index_s : nsl_video.pixel_stream.bus_t;
 
 begin
+
+  assert false
+    report "This component is deprecated, move to nsl_video.terminal.terminal_text_buffer_colormap and nsl_video.colormap.palette_expander"
+    severity warning;
   
   term: work.terminal.terminal_text_buffer_colormap
     generic map(
