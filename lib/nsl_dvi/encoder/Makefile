@@ -9,3 +9,4 @@ deps += nsl_line_coding.tmds
 deps += nsl_math.arith
 deps += nsl_video.pixel_stream
 deps += nsl_video.raster
+deps += nsl_synthesis.assertion

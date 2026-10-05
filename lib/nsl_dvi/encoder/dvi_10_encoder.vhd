@@ -2,7 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library nsl_color, nsl_math, nsl_line_coding, nsl_data, nsl_video, work;
+library nsl_color, nsl_math, nsl_line_coding, nsl_data, nsl_video, work, nsl_synthesis;
 use work.encoder.all;
 use work.dvi.all;
 use nsl_data.bytestream.all;
@@ -12,7 +12,7 @@ use nsl_data.crc.all;
 entity dvi_10_encoder is
   generic(
     config_c : nsl_video.pixel_stream.config_t;
-    channel_map_c : work.encoder.channel_map_t := work.encoder.channel_map_rgb_c
+    channel_map_c : work.encoder.channel_map_t := work.encoder.channel_map_auto_c
     );
   port(
     reset_n_i : in std_ulogic;
@@ -81,8 +81,20 @@ architecture beh of dvi_10_encoder is
   signal sof_s, sol_s, ready_s, valid_s: std_ulogic;
   signal stream_pixel_s: nsl_video.pixel_stream.pixel_t;
   signal pixel_s : byte_string(0 to 2);
+
+  constant channel_map_s : channel_map_t
+    := channel_map_resolve(config_c, channel_map_c);
   
 begin
+
+  channel_map_check: nsl_synthesis.assertion.synth_assert
+    generic map(
+      message_c => "No TMDS channel map for the stream colorspace",
+      condition_c => channel_map_s /= channel_map_auto_c
+      )
+    port map(
+      unused_i => '0'
+      );
 
   regs: process(pixel_clock_i, reset_n_i) is
   begin
@@ -240,7 +252,7 @@ begin
 
   -- The raster cannot wait, so a pixel the stream did not hold has
   -- to have something go out in its place.
-  pixel_s <= channel_bytes(config_c, channel_map_c, stream_pixel_s)
+  pixel_s <= channel_bytes(config_c, channel_map_s, stream_pixel_s)
              when valid_s = '1' else channel_bytes_starved_c;
 
   encoder: work.encoder.source_stream_encoder

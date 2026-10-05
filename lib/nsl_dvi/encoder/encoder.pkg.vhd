@@ -16,6 +16,17 @@ package encoder is
   type channel_map_t is array (natural range 0 to 2) of natural range 0 to 3;
   constant channel_map_rgb_c: channel_map_t := (2, 1, 0);
   constant channel_map_ycbcr_c: channel_map_t := (1, 0, 2);
+  -- Stands for the map the stream colorspace calls for, see
+  -- channel_map_resolve.
+  constant channel_map_auto_c: channel_map_t := (3, 3, 3);
+
+  -- Map a sink applies.  An explicit map is taken as it is.
+  -- channel_map_auto_c resolves from the colorspace of the stream:
+  -- RGB and YCBCR444 take their own map.  Other colorspaces have no
+  -- map, they resolve to channel_map_auto_c, which a sink rejects.
+  function channel_map_resolve(cfg: nsl_video.pixel_stream.config_t;
+                               channel_map: channel_map_t)
+    return channel_map_t;
 
   -- Channel bytes of a stream pixel.  Components wider than a byte
   -- keep their top eight bits.
@@ -60,10 +71,14 @@ package encoder is
   -- stream opens and hands its pixels out from there.  synced_o
   -- states whether it does.  While it does not, blanking colour
   -- goes out in place of pixels.
+  --
+  -- Channel map follows the stream colorspace unless stated, see
+  -- channel_map_resolve.  A stream with no channel map (indexed,
+  -- gray, YCbCr 4:2:2) fails elaboration.
   component dvi_10_encoder is
     generic(
       config_c : nsl_video.pixel_stream.config_t;
-      channel_map_c : channel_map_t := channel_map_rgb_c
+      channel_map_c : channel_map_t := channel_map_auto_c
       );
     port(
       reset_n_i : in std_ulogic;
@@ -97,6 +112,25 @@ package encoder is
 end package encoder;
 
 package body encoder is
+
+  function channel_map_resolve(cfg: nsl_video.pixel_stream.config_t;
+                               channel_map: channel_map_t)
+    return channel_map_t
+  is
+  begin
+    if channel_map /= channel_map_auto_c then
+      return channel_map;
+    end if;
+
+    case cfg.colorspace is
+      when nsl_video.pixel_stream.COLORSPACE_RGB =>
+        return channel_map_rgb_c;
+      when nsl_video.pixel_stream.COLORSPACE_YCBCR444 =>
+        return channel_map_ycbcr_c;
+      when others =>
+        return channel_map_auto_c;
+    end case;
+  end function;
 
   function channel_bytes(cfg: nsl_video.pixel_stream.config_t;
                          channel_map: channel_map_t;

@@ -40,4 +40,7 @@ it does not::
 `channel_map_t` states which stream component each TMDS channel
 carries, because a colourspace names its components in one order and
 the wire sends them in another: RGB names red first and channel 0
-carries blue, YCbCr names luma first and channel 0 carries Cb.
+carries blue, YCbCr names luma first and channel 0 carries Cb.  By
+default, the map follows the stream colorspace: RGB and YCbCr 4:4:4
+streams go out as they are, other colorspaces are rejected at
+elaboration.
