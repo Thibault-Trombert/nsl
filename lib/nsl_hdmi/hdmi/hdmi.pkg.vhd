@@ -2,7 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library nsl_data, nsl_math, nsl_color;
+library nsl_data, nsl_math, nsl_color, nsl_video;
 use nsl_data.bytestream.all;
 use nsl_data.crc.all;
 
@@ -43,6 +43,21 @@ package hdmi is
                         data: byte_string) return data_island_t;
 
   function di_avi_rgb return data_island_t;
+
+  -- AVI infoframe (version 2) stating what a pixel stream
+  -- configuration carries:
+  --
+  -- - Y1Y0 from the colorspace, which must be RGB, YCBCR444 or
+  --   YCBCR422,
+  -- - C1C0 from the colorimetry for YCbCr, no data for RGB,
+  -- - Q1Q0 from the quantization for RGB, default for YCbCr,
+  -- - YQ1YQ0 from the quantization, for RGB as well, where it
+  --   matches Q1Q0,
+  -- - underscan, no VIC, no aspect ratio or bar information.
+  --
+  -- An unresolved quantization (QUANTIZATION_AUTO) states the
+  -- default range.
+  function di_avi(cfg: nsl_video.pixel_stream.config_t) return data_island_t;
 
   function di_source_product_desc(vn, pd: string;
                                   source_info : integer := 0) return data_island_t;
@@ -141,6 +156,70 @@ package body hdmi is
   begin
     data := from_hex("02000000000000000000000000");
     return di_infoframe(infoframe_avi, 3, data);
+  end function;
+
+  function di_avi(cfg: nsl_video.pixel_stream.config_t) return data_island_t
+  is
+    variable rgb: boolean;
+    variable y, c, q, yq: std_ulogic_vector(1 downto 0);
+    variable data: byte_string(1 to 13);
+  begin
+    rgb := false;
+    c := "00";
+    q := "00";
+    yq := "00";
+
+    case cfg.colorspace is
+      when nsl_video.pixel_stream.COLORSPACE_RGB =>
+        rgb := true;
+        y := "00";
+      when nsl_video.pixel_stream.COLORSPACE_YCBCR422 =>
+        y := "01";
+      when nsl_video.pixel_stream.COLORSPACE_YCBCR444 =>
+        y := "10";
+      when others =>
+        assert false
+          report "AVI infoframe only states RGB and YCbCr colorspaces"
+          severity failure;
+        y := "00";
+    end case;
+
+    if not rgb then
+      case cfg.colorimetry is
+        when nsl_video.pixel_stream.COLORIMETRY_BT601 =>
+          c := "01";
+        when nsl_video.pixel_stream.COLORIMETRY_BT709 =>
+          c := "10";
+      end case;
+    end if;
+
+    case cfg.quantization is
+      when nsl_video.pixel_stream.QUANTIZATION_FULL =>
+        yq := "01";
+        if rgb then
+          q := "10";
+        end if;
+      when nsl_video.pixel_stream.QUANTIZATION_LIMITED =>
+        yq := "00";
+        if rgb then
+          q := "01";
+        end if;
+      when nsl_video.pixel_stream.QUANTIZATION_AUTO =>
+        null;
+    end case;
+
+    data := (others => x"00");
+    -- 0 Y1 Y0 A0 B1 B0 S1 S0, underscanned
+    data(1)(6 downto 5) := y;
+    data(1)(1 downto 0) := "10";
+    -- C1 C0 M1 M0 R3 R2 R1 R0
+    data(2)(7 downto 6) := c;
+    -- ITC EC2 EC1 EC0 Q1 Q0 SC1 SC0
+    data(3)(3 downto 2) := q;
+    -- VIC in data(4)
+    -- YQ1 YQ0 CN1 CN0 PR3 PR2 PR1 PR0
+    data(5)(7 downto 6) := yq;
+    return di_infoframe(infoframe_avi, 2, data);
   end function;
 
   function di_null return data_island_t

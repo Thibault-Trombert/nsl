@@ -335,6 +335,9 @@ projects:
   - name: gray_sync
     path: gray_sync
     tags: [ghdl, simulation]
+  - name: hdmi_colorspace
+    path: hdmi/colorspace
+    tags: [ghdl, simulation]
   - name: hdmi_di_bch
     path: hdmi/di_bch
     tags: [ghdl, simulation]
