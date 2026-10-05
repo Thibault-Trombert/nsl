@@ -20,6 +20,7 @@ entity adv7511_driver is
 
     irq_n_i : in std_ulogic := '1';
 
+    i2c_divisor_i : in unsigned(4 downto 0);
     cmd_o : out nsl_bnoc.framed.framed_req;
     cmd_i : in nsl_bnoc.framed.framed_ack;
     rsp_i : in nsl_bnoc.framed.framed_req;
@@ -461,6 +462,8 @@ begin
 
       valid_i => access_cmd_valid_s,
       ready_o => access_ready_s,
+      set_divisor_i => '1',
+      divisor_i => i2c_divisor_i,
       saddr_i => i2c_saddr_c,
       addr_i => unsigned(r.addr),
       write_i => access_write_s,

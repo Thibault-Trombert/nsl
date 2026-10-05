@@ -74,6 +74,10 @@ package adv7511 is
       irq_n_i : in std_ulogic := '1';
 
       -- Framed master port to a nsl_i2c.transactor.transactor_framed_controller.
+      -- Every transaction sets the transactor SCL divisor to
+      -- i2c_divisor_i, see nsl_i2c.transactor.scl_divisor.  The chip
+      -- takes up to 400kHz.  Pseudo-constant.
+      i2c_divisor_i : in unsigned(4 downto 0);
       cmd_o : out nsl_bnoc.framed.framed_req;
       cmd_i : in nsl_bnoc.framed.framed_ack;
       rsp_i : in nsl_bnoc.framed.framed_req;
