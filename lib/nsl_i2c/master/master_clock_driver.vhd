@@ -414,8 +414,11 @@ begin
         end case;
         
       when ST_ROUTE =>
-        null;
-        
+        -- Keep holding an owned bus until the command takes over
+        if r.bus_state = BUS_OWNED then
+          i2c_o.scl.drain_n <= '0';
+        end if;
+
       when ST_RESTART_PRE =>
         i2c_o.sda.drain_n <= '0';
         i2c_o.scl.drain_n <= '0';
