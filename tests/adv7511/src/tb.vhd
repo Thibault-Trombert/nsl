@@ -23,7 +23,14 @@ end entity;
 architecture sim of tb is
 
   -- Control domain
-  constant clock_period_c : time := 250 ns;
+  constant clock_hz_c : natural := 16_000_000;
+  constant clock_period_c : time := 1 sec / clock_hz_c;
+  constant scl_hz_c : natural := 400_000;
+  constant i2c_divisor_c : unsigned(4 downto 0)
+    := nsl_i2c.transactor.scl_divisor(clock_hz_c, scl_hz_c);
+  -- Transactor counts eight cycles per half SCL period at divisor 0
+  -- at this clock rate
+  constant scl_period_c : time := 2 * 8 * (to_integer(i2c_divisor_c) + 1) * clock_period_c;
   -- Shortens startup and poll delays to a few thousand cycles
   constant driver_clock_hz_c : natural := 40_000;
   constant saddr_c : unsigned(7 downto 1) := i2c_saddr_default_c;
@@ -47,6 +54,7 @@ architecture sim of tb is
   signal irq_n_s : std_ulogic;
 
   signal hpd_out_s, ready_s : std_ulogic;
+  signal scl_shortest_s : time;
 
   -- Video domain
   constant pixel_period_c : time := 10 ns;
@@ -98,6 +106,7 @@ begin
       reset_n_i => reset_n_s,
       irq_n_i => irq_n_s,
 
+      i2c_divisor_i => i2c_divisor_c,
       cmd_o => cmd_s.req,
       cmd_i => cmd_s.ack,
       rsp_i => rsp_s.req,
@@ -138,7 +147,7 @@ begin
 
   transactor: nsl_i2c.transactor.transactor_framed_controller
     generic map(
-      clock_i_hz_c => 4_000_000
+      clock_i_hz_c => clock_hz_c
       )
     port map(
       clock_i => clock_s,
@@ -216,6 +225,25 @@ begin
     end if;
   end process;
 
+  -- Shortest SCL period seen, checked against the one the divisor
+  -- asks for: the divisor reached the transactor, and the rate is not
+  -- the transactor default.
+  scl_monitor: process is
+    variable last_edge: time := 0 ns;
+  begin
+    scl_shortest_s <= 1 sec;
+    wait until reset_n_s = '1';
+    wait until rising_edge(i2c_s.scl);
+    last_edge := now;
+    loop
+      wait until rising_edge(i2c_s.scl);
+      if now - last_edge < scl_shortest_s then
+        scl_shortest_s <= now - last_edge;
+      end if;
+      last_edge := now;
+    end loop;
+  end process;
+
   control_check: process is
     procedure expect_reg(addr: natural; value: byte) is
     begin
@@ -283,6 +311,11 @@ begin
 
     hpd_s <= '1';
     expect_configured("second plug");
+
+    assert scl_shortest_s >= scl_period_c and scl_shortest_s <= scl_period_c * 5 / 4
+      report "Fastest SCL period is " & time'image(scl_shortest_s)
+      & ", expected " & time'image(scl_period_c)
+      severity failure;
 
     if not video_done_s then
       wait until video_done_s;
