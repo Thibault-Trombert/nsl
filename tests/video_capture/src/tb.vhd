@@ -32,6 +32,11 @@ architecture arch of tb is
   -- What goes out has backpressure, what comes back cannot be held
   -- back at all.
   constant tx_config_c: config_t := config(pixels => 1);
+  constant bars_index_config_c : nsl_video.pixel_stream.config_t
+    := nsl_video.pixel_stream.config(pixels => 1, components => 1, component_bits => 3);
+  constant bars_palette_c : nsl_video.pixel_stream.pixel_vector(0 to 7)
+    := nsl_video.pixel_stream.palette(tx_config_c, nsl_video.pattern.color_bars_palette_c);
+  signal bars_index_s : nsl_video.pixel_stream.bus_t;
   constant rx_config_c: config_t := config(pixels => 1, ready => false);
 
   signal clock_s, reset_n_s: std_ulogic;
@@ -74,15 +79,30 @@ begin
       done_i => done_s
       );
 
-  bars: nsl_video.pattern.rgb_color_bars
+  bars: nsl_video.pattern.color_bars
     generic map(
       geometry_c => geometry_c,
-      config_c => tx_config_c,
+      config_c => bars_index_config_c,
       bar_width_c => bar_width_c
       )
     port map(
       clock_i => clock_s,
       reset_n_i => reset_n_s,
+      out_o => bars_index_s.m,
+      out_i => bars_index_s.s
+      );
+
+  bars_colors: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => bars_index_config_c,
+      out_config_c => tx_config_c
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+      palette_i => bars_palette_c,
+      in_i => bars_index_s.m,
+      in_o => bars_index_s.s,
       out_o => tx_s.m,
       out_i => tx_s.s
       );

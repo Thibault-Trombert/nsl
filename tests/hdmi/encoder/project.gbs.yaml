@@ -4,6 +4,7 @@ root:
   name: top
   deps:
     - nsl_video.pattern
+    - nsl_video.colormap
     - nsl_hdmi.encoder
     - nsl_hdmi.hdmi
     - nsl_video.mode
