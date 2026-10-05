@@ -3,7 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library nsl_clocking, nsl_indication, nsl_time, nsl_data, nsl_video,
-  nsl_spi, nsl_solomonsystech;
+  nsl_spi, nsl_solomonsystech, nsl_color;
 use nsl_video.terminal.all;
 use nsl_data.text.all;
 use nsl_time.calendar.all;
@@ -49,14 +49,22 @@ architecture arch of boundary is
 
   constant text_length_c : natural := labels_text_length(labels_c);
 
-  constant pixel_config_c : nsl_video.pixel_stream.config_t
+  constant index_config_c : nsl_video.pixel_stream.config_t
     := nsl_video.pixel_stream.config(pixels => 1,
                                      components => 1,
                                      component_bits => 1);
+  constant gray_config_c : nsl_video.pixel_stream.config_t
+    := nsl_video.pixel_stream.config(pixels => 1,
+                                     colorspace => nsl_video.pixel_stream.COLORSPACE_GRAY,
+                                     component_bits => 1);
+  constant palette_c : nsl_video.pixel_stream.pixel_vector(0 to 1)
+    := nsl_video.pixel_stream.palette(gray_config_c,
+                                      (0 => nsl_color.rgb.rgb24_black,
+                                       1 => nsl_color.rgb.rgb24_white));
 
   signal clock_s, internal_reset_n_s, reset_n_s : std_ulogic;
 
-  signal pixel_s : nsl_video.pixel_stream.bus_t;
+  signal index_s, pixel_s : nsl_video.pixel_stream.bus_t;
   signal synced_s, frame_end_s : std_ulogic;
 
   signal spi_s : nsl_spi.spi.spi_slave_i;
@@ -109,7 +117,7 @@ begin
   display: nsl_solomonsystech.ssd1306.ssd1306_spi_driver
     generic map(
       clock_i_hz_c => clock_hz_c,
-      config_c => pixel_config_c,
+      config_c => gray_config_c,
       width_c => width_c,
       height_c => height_c,
       com_alternative_c => false,
@@ -148,7 +156,7 @@ begin
       labels_c => labels_c,
       blank_color_c => color_off_c,
       underline_support_c => true,
-      config_c => pixel_config_c,
+      config_c => index_config_c,
       geometry_c => nsl_video.mode.geometry(width_c, height_c)
       )
     port map(
@@ -156,15 +164,33 @@ begin
       reset_n_i => reset_n_s,
 
       enable_i => '1',
-      out_o => pixel_s.m,
-      out_i => pixel_s.s,
+      out_o => index_s.m,
+      out_i => index_s.s,
 
       text_i => text_s,
       color_i => colors_s
       );
 
-  frame_end_s <= '1' when nsl_video.pixel_stream.is_taken(pixel_config_c, pixel_s.m, pixel_s.s)
-                 and nsl_video.pixel_stream.is_eof(pixel_config_c, pixel_s.m)
+  expander: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => gray_config_c
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+
+      palette_i => palette_c,
+
+      in_i => index_s.m,
+      in_o => index_s.s,
+
+      out_o => pixel_s.m,
+      out_i => pixel_s.s
+      );
+
+  frame_end_s <= '1' when nsl_video.pixel_stream.is_taken(gray_config_c, pixel_s.m, pixel_s.s)
+                 and nsl_video.pixel_stream.is_eof(gray_config_c, pixel_s.m)
                  else '0';
 
   counters: process(clock_s, reset_n_s)

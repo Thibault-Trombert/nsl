@@ -4,8 +4,9 @@
 
 Displays a status screen on the ZedBoard 128x32 monochrome OLED
 (UG-2832HSWEG04, SSD1306 controller), PL only.  The terminal label
-generator renders a one-bit color index stream with the 6x8 font,
-which goes straight to the SSD1306 driver.  The screen shows uptime
+generator renders a one-bit color index stream with the 6x8 font, a
+palette expander turns it into a black and white gray stream for the
+SSD1306 driver.  The screen shows uptime
 since configuration, the count of frames sent to the panel, and a
 status line that flips between normal and inverted video every two
 seconds.  LD0 toggles every 32 frames as a refresh heartbeat, LD1

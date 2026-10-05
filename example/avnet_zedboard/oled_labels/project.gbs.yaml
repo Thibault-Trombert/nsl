@@ -7,6 +7,8 @@ root:
     - nsl_video.mode
     - nsl_video.pixel_stream
     - nsl_video.terminal
+    - nsl_video.colormap
+    - nsl_color.rgb
     - nsl_indication.font_6x8
     - nsl_spi.spi
     - nsl_clocking.distribution
