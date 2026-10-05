@@ -15,10 +15,14 @@ package encoder is
   -- stream follows it: the encoder locks onto the first frame the
   -- stream opens and hands its pixels out from there.  synced_o
   -- states whether it does.
+  --
+  -- Channel map follows the stream colorspace unless stated, see
+  -- nsl_dvi.encoder.channel_map_resolve.  A stream with no channel
+  -- map (indexed, gray, YCbCr 4:2:2) fails elaboration.
   component hdmi_13_encoder is
     generic(
       config_c : nsl_video.pixel_stream.config_t;
-      channel_map_c : nsl_dvi.encoder.channel_map_t := nsl_dvi.encoder.channel_map_rgb_c;
+      channel_map_c : nsl_dvi.encoder.channel_map_t := nsl_dvi.encoder.channel_map_auto_c;
       vendor_name_c: string := "NSL";
       product_description_c: string := "HDMI Encoder";
       source_type_c: integer := 0
