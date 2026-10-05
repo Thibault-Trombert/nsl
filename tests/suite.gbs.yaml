@@ -768,6 +768,9 @@ projects:
   - name: video_raster
     path: video_raster
     tags: [ghdl, simulation]
+  - name: video_palette_expander
+    path: video_palette_expander
+    tags: [ghdl, simulation]
   - name: dvi_encoder
     path: dvi_encoder
     tags: [ghdl, simulation]
