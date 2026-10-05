@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 
 library nsl_clocking, nsl_dvi, nsl_i2c, nsl_video, nsl_io,
   nsl_icesugar, nsl_indication, nsl_color, nsl_sipeed, nsl_digilent,
-  nsl_uart, nsl_data;
+  nsl_uart, nsl_data, nsl_math;
 use nsl_data.bytestream.all;
 use nsl_data.text.all;
 use nsl_dvi.dvi.all;
@@ -154,6 +154,16 @@ architecture arch of boundary is
   signal blended_s : byte_string(0 to 2);
 
   signal panel_s : nsl_video.pixel_stream.bus_t;
+
+  constant index_config_c : nsl_video.pixel_stream.config_t
+    := nsl_video.pixel_stream.config(pixels => 1,
+                                     component_bits => nsl_math.arith.log2(palette_c'length),
+                                     colorspace => nsl_video.pixel_stream.COLORSPACE_INDEXED);
+  constant pixel_palette_c : nsl_video.pixel_stream.pixel_vector(0 to palette_c'length-1)
+    := nsl_video.pixel_stream.palette(pixel_config_c, palette_c);
+  signal overlay_index_s : nsl_video.pixel_stream.bus_t;
+  signal panel_index_s : nsl_video.pixel_stream.bus_t;
+
   signal panel_synced_s : std_ulogic;
 
   -- The same things the panel says, for when the panel is the thing
@@ -390,28 +400,46 @@ begin
   sol_s <= '1' when de_s = '1' and de_prev_s = '0' else '0';
   sof_s <= sol_s and frame_pending_s;
 
-  overlay: nsl_video.terminal.terminal_labels
+  overlay: nsl_video.terminal.terminal_labels_colormap
     generic map(
       row_count_l2_c => 5,
       column_count_l2_c => 6,
       character_count_l2_c => 8,
-      color_palette_c => palette_c,
+      color_count_l2_c => index_config_c.component_bits,
       font_c => nsl_indication.font_6x8.font_6x8_c,
       labels_c => overlay_labels_c,
       font_hscale_c => 2,
       font_vscale_c => 2,
-      config_c => pixel_config_c,
+      config_c => index_config_c,
       geometry_c => screen_geometry_c
       )
     port map(
       clock_i => pixel_clock_s,
       reset_n_i => pixel_reset_n_s,
 
-      out_o => overlay_s.m,
-      out_i => overlay_s.s,
+      out_o => overlay_index_s.m,
+      out_i => overlay_index_s.s,
 
       text_i => overlay_text_s,
       color_i => overlay_color_s
+      );
+
+  overlay_palette: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => pixel_config_c
+      )
+    port map(
+      clock_i => pixel_clock_s,
+      reset_n_i => pixel_reset_n_s,
+
+      palette_i => pixel_palette_c,
+
+      in_i => overlay_index_s.m,
+      in_o => overlay_index_s.s,
+
+      out_o => overlay_s.m,
+      out_i => overlay_s.s
       );
 
   -- Pulled a pixel at a time in step with the raster going by.  A
@@ -477,26 +505,44 @@ begin
       );
 
   -- A screen of its own, on the board's clock
-  panel_text: nsl_video.terminal.terminal_labels
+  panel_text: nsl_video.terminal.terminal_labels_colormap
     generic map(
       row_count_l2_c => 4,
       column_count_l2_c => 5,
       character_count_l2_c => 8,
-      color_palette_c => palette_c,
+      color_count_l2_c => index_config_c.component_bits,
       font_c => nsl_indication.font_6x8.font_6x8_c,
       labels_c => panel_labels_c,
-      config_c => pixel_config_c,
+      config_c => index_config_c,
       geometry_c => panel_geometry_c
       )
     port map(
       clock_i => clock_s,
       reset_n_i => reset_n_s,
 
-      out_o => panel_s.m,
-      out_i => panel_s.s,
+      out_o => panel_index_s.m,
+      out_i => panel_index_s.s,
 
       text_i => panel_text_s,
       color_i => panel_color_s
+      );
+
+  panel_text_palette: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => pixel_config_c
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+
+      palette_i => pixel_palette_c,
+
+      in_i => panel_index_s.m,
+      in_o => panel_index_s.s,
+
+      out_o => panel_s.m,
+      out_i => panel_s.s
       );
 
   display: nsl_icesugar.pmod_lcd_096.pmod_lcd_096_driver

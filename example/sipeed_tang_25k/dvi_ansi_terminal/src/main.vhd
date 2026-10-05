@@ -14,9 +14,9 @@ use nsl_logic.bool.all;
 --
 -- UART bytes at 115200 8N1 go through a FIFO into
 -- nsl_terminal.ansi.ansi_terminal, which drives the user port of a
--- terminal_text_buffer. Escape sequences move the cursor, erase and
--- color text with the 16-color ANSI palette; scrolling rolls the
--- buffer through the text buffer row offset.
+-- terminal_text_buffer_colormap. Escape sequences move the cursor,
+-- erase and color text with the 16-color ANSI palette; scrolling rolls
+-- the buffer through the text buffer row offset.
 --
 -- Keystrokes from a low-speed USB keyboard cross from their 12MHz
 -- domain and go out on the UART transmitter, behind engine replies;
@@ -239,6 +239,14 @@ begin
     signal rd_character_s : unsigned(7 downto 0);
     signal rd_underline_s : std_ulogic;
     signal rd_fg_s, rd_bg_s : unsigned(3 downto 0);
+
+    constant index_config_c : nsl_video.pixel_stream.config_t
+      := nsl_video.pixel_stream.config(pixels => 1,
+                                       component_bits => nsl_math.arith.log2(palette_c'length),
+                                       colorspace => nsl_video.pixel_stream.COLORSPACE_INDEXED);
+    constant pixel_palette_c : nsl_video.pixel_stream.pixel_vector(0 to palette_c'length-1)
+      := nsl_video.pixel_stream.palette(pixel_config_c, palette_c);
+    signal index_s : nsl_video.pixel_stream.bus_t;
   begin
 
     -- uart_rx state machine needs a synchronous input, the pin is
@@ -337,17 +345,17 @@ begin
         background_i => rd_bg_s
         );
 
-    display: nsl_video.terminal.terminal_text_buffer
+    display: nsl_video.terminal.terminal_text_buffer_colormap
       generic map(
         row_count_l2_c => row_count_l2_c,
         column_count_l2_c => column_count_l2_c,
         character_count_l2_c => 8,
-        color_palette_c => palette_c,
+        color_count_l2_c => index_config_c.component_bits,
         font_c => font_c,
         underline_support_c => true,
         font_hscale_c => font_hscale_c,
         font_vscale_c => font_vscale_c,
-        config_c => pixel_config_c,
+        config_c => index_config_c,
         geometry_c => geometry_c
         )
       port map(
@@ -355,8 +363,8 @@ begin
         video_reset_n_i => dvi_pixel_clock_reset_n_s,
 
         video_enable_i => '1',
-        out_o => pixel_s.m,
-        out_i => pixel_s.s,
+        out_o => index_s.m,
+        out_i => index_s.s,
 
         term_clock_i => clock_i,
         term_reset_n_i => reset_n_i,
@@ -376,6 +384,24 @@ begin
         underline_o => rd_underline_s,
         foreground_o => rd_fg_s,
         background_o => rd_bg_s
+        );
+
+    display_palette: nsl_video.colormap.palette_expander
+      generic map(
+        in_config_c => index_config_c,
+        out_config_c => pixel_config_c
+        )
+      port map(
+        clock_i => dvi_pixel_clock_s,
+        reset_n_i => dvi_pixel_clock_reset_n_s,
+
+        palette_i => pixel_palette_c,
+
+        in_i => index_s.m,
+        in_o => index_s.s,
+
+        out_o => pixel_s.m,
+        out_i => pixel_s.s
         );
 
     -- Reply path: engine answers -> FIFO -> host TX

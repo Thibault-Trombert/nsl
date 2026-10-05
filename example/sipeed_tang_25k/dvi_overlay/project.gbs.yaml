@@ -8,6 +8,8 @@ root:
     - nsl_dvi.decoder
     - nsl_dvi.encoder
     - nsl_video.terminal
+    - nsl_video.colormap
+    - nsl_math.arith
     - nsl_uart.serdes
     - nsl_dvi.dvi
     - nsl_video.raster

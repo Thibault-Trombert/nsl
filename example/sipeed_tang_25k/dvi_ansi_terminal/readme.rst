@@ -4,9 +4,10 @@
 
 A serial ANSI terminal on a DVI display. Bytes received on the UART at
 115200 8N1 go through a FIFO into ``nsl_terminal.ansi.ansi_terminal``,
-which drives a ``terminal_text_buffer`` rendered on the DVI output
-(XGA 1024x768, J4 Pmod). Engine replies (cursor position, device
-attributes) go back out on the UART transmitter.
+which drives a ``terminal_text_buffer_colormap`` whose color indices
+go through a ``palette_expander`` to the DVI output (XGA 1024x768, J4
+Pmod). Engine replies (cursor position, device attributes) go back out
+on the UART transmitter.
 
 The screen is 85x48 characters with the 16-color ANSI palette and
 underline. Supported: cursor motion and positioning, display and line

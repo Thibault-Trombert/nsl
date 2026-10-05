@@ -594,6 +594,15 @@ architecture arch of boundary is
   signal uart_ready_s, uart_valid_s : std_ulogic;
 
   signal panel_s : nsl_video.pixel_stream.bus_t;
+
+  constant index_config_c : nsl_video.pixel_stream.config_t
+    := nsl_video.pixel_stream.config(pixels => 1,
+                                     component_bits => nsl_math.arith.log2(palette_c'length),
+                                     colorspace => nsl_video.pixel_stream.COLORSPACE_INDEXED);
+  constant pixel_palette_c : nsl_video.pixel_stream.pixel_vector(0 to palette_c'length-1)
+    := nsl_video.pixel_stream.palette(pixel_config_c, palette_c);
+  signal panel_index_s : nsl_video.pixel_stream.bus_t;
+
   signal panel_synced_s : std_ulogic;
   signal panel_text_s : string(1 to panel_rows_c * panel_columns_c);
   signal panel_color_s : label_color_vector(0 to 8);
@@ -1276,27 +1285,45 @@ begin
                 /= (drive_peak_s(0)'left downto sample_bits_c-1 => '0')
                 else '0';
 
-  panel_text: nsl_video.terminal.terminal_labels
+  panel_text: nsl_video.terminal.terminal_labels_colormap
     generic map(
       row_count_l2_c => 4,
       column_count_l2_c => 5,
       character_count_l2_c => 8,
-      color_palette_c => palette_c,
+      color_count_l2_c => index_config_c.component_bits,
       font_c => nsl_indication.font_6x8.font_6x8_c,
       labels_c => panel_labels_c,
       blank_color_c => color_ground_c,
-      config_c => pixel_config_c,
+      config_c => index_config_c,
       geometry_c => nsl_video.mode.geometry(160, 80)
       )
     port map(
       clock_i => clock_s,
       reset_n_i => reset_n_s,
 
-      out_o => panel_s.m,
-      out_i => panel_s.s,
+      out_o => panel_index_s.m,
+      out_i => panel_index_s.s,
 
       text_i => panel_text_s,
       color_i => panel_color_s
+      );
+
+  panel_text_palette: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => pixel_config_c
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+
+      palette_i => pixel_palette_c,
+
+      in_i => panel_index_s.m,
+      in_o => panel_index_s.s,
+
+      out_o => panel_s.m,
+      out_i => panel_s.s
       );
 
   display: nsl_icesugar.pmod_lcd_096.pmod_lcd_096_driver

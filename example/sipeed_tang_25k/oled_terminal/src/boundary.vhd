@@ -3,7 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library nsl_clocking, nsl_digilent, nsl_color,
-  nsl_indication, nsl_video, nsl_solomonsystech;
+  nsl_indication, nsl_video, nsl_solomonsystech, nsl_math;
 use nsl_color.rgb.all;
 
 entity boundary is
@@ -63,6 +63,15 @@ architecture arch of boundary is
     := nsl_video.pixel_stream.config(pixels => 1);
 
   signal pixel_s : nsl_video.pixel_stream.bus_t;
+
+  constant index_config_c : nsl_video.pixel_stream.config_t
+    := nsl_video.pixel_stream.config(pixels => 1,
+                                     component_bits => nsl_math.arith.log2(color_palette_c'length),
+                                     colorspace => nsl_video.pixel_stream.COLORSPACE_INDEXED);
+  constant pixel_palette_c : nsl_video.pixel_stream.pixel_vector(0 to color_palette_c'length-1)
+    := nsl_video.pixel_stream.palette(pixel_config_c, color_palette_c);
+  signal index_s : nsl_video.pixel_stream.bus_t;
+
   signal synced_s, frame_end_s : std_ulogic;
 
   signal write_s : std_ulogic;
@@ -108,17 +117,17 @@ begin
       pmod_io => j4_io
       );
 
-  terminal: nsl_video.terminal.terminal_text_buffer
+  terminal: nsl_video.terminal.terminal_text_buffer_colormap
     generic map(
       row_count_l2_c => 3,
       column_count_l2_c => 4,
       character_count_l2_c => 8,
-      color_palette_c => color_palette_c,
+      color_count_l2_c => index_config_c.component_bits,
       font_c => nsl_indication.font_6x8.font_6x8_c,
       underline_support_c => false,
       font_hscale_c => 1,
       font_vscale_c => 1,
-      config_c => pixel_config_c,
+      config_c => index_config_c,
       geometry_c => geometry_c
       )
     port map(
@@ -126,8 +135,8 @@ begin
       video_reset_n_i => reset_n_s,
 
       video_enable_i => '1',
-      out_o => pixel_s.m,
-      out_i => pixel_s.s,
+      out_o => index_s.m,
+      out_i => index_s.s,
 
       term_clock_i => clock_s,
       term_reset_n_i => reset_n_s,
@@ -139,6 +148,24 @@ begin
       character_i => character_s,
       foreground_i => foreground_s,
       background_i => "000"
+      );
+
+  terminal_palette: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => pixel_config_c
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+
+      palette_i => pixel_palette_c,
+
+      in_i => index_s.m,
+      in_o => index_s.s,
+
+      out_o => pixel_s.m,
+      out_i => pixel_s.s
       );
 
   -- Fills the text buffer with the static screen once after reset

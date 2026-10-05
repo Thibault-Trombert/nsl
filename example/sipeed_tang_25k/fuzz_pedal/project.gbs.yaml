@@ -19,6 +19,8 @@ root:
     - nsl_sipeed.pmod_btn_4_4
     - nsl_icesugar.pmod_lcd_096
     - nsl_video.terminal
+    - nsl_video.colormap
+    - nsl_math.arith
     - nsl_video.pixel_stream
     - nsl_video.mode
     - nsl_indication.font_6x8
