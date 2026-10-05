@@ -1,0 +1,29 @@
+name: ssd1306_labels
+
+root:
+  name: top
+  deps:
+    - nsl_solomonsystech.ssd1306
+    - nsl_video.terminal
+    - nsl_video.pixel_stream
+    - nsl_video.mode
+    - nsl_indication.font
+    - nsl_indication.font_6x8
+    - nsl_spi.spi
+    - nsl_data.bytestream
+    - nsl_data.text
+    - nsl_simulation.control
+  sources:
+    - file_type: vhdl
+      files:
+        - src/tb.vhd
+
+output:
+  - name: simulation
+    topcell: tb
+    backend_config:
+      gbs.builtin.ghdl:
+        success_regex: "Terminating with error level: 0"
+    outputs:
+      - type: simulation-log
+        path: simulation.log

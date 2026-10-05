@@ -656,6 +656,9 @@ projects:
   - name: spi_slave
     path: spi_slave
     tags: [ghdl, simulation]
+  - name: ssd1306_labels
+    path: ssd1306_labels
+    tags: [ghdl, simulation]
   - name: ssd1331
     path: ssd1331
     tags: [ghdl, simulation]
