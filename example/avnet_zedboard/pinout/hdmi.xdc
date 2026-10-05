@@ -21,3 +21,4 @@ set_property -dict { PACKAGE_PIN V17   IOSTANDARD LVCMOS33 } [get_ports { hd_hsy
 set_property -dict { PACKAGE_PIN W17   IOSTANDARD LVCMOS33 } [get_ports { hd_vsync_o }];
 set_property -dict { PACKAGE_PIN AA18   IOSTANDARD LVCMOS33 } [get_ports { hd_scl_io }];
 set_property -dict { PACKAGE_PIN Y16   IOSTANDARD LVCMOS33 } [get_ports { hd_sda_io }];
+set_property -dict { PACKAGE_PIN W16   IOSTANDARD LVCMOS33 } [get_ports { hd_int_n_i }];
