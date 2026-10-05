@@ -67,6 +67,8 @@ package st7735 is
   -- display off and puts the controller in sleep, then holds it in
   -- reset.
   --
+  -- Stream must be RGB, elaboration fails otherwise.
+  --
   -- Default window and orientation generics suit the common 0.96"
   -- 160x80 IPS panels in landscape (row/column swap): visible window
   -- offset 1 on the long axis, 26 on the short one, inversion on.
