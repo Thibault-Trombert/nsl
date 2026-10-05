@@ -6,3 +6,4 @@ deps += nsl_i2c.i2c
 deps += nsl_i2c.master
 deps += nsl_data.bytestream
 deps += nsl_data.endian
+deps += nsl_math.arith

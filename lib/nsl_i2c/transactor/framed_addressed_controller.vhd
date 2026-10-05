@@ -24,6 +24,8 @@ entity framed_addressed_controller is
 
     valid_i : in std_ulogic;
     ready_o : out std_ulogic;
+    set_divisor_i : in std_ulogic := '0';
+    divisor_i : in unsigned(4 downto 0) := (others => '0');
     saddr_i : in unsigned(7 downto 1);
     addr_i : in unsigned(8 * addr_byte_count_c - 1 downto 0) := (others => '0');
     write_i : in std_ulogic;
@@ -50,6 +52,7 @@ architecture rtl of framed_addressed_controller is
     CMD_RESET,
 
     CMD_IDLE,
+    CMD_DIV,
     CMD_START,
     CMD_WRITE_CMD,
     CMD_SADDR_PUT,
@@ -67,6 +70,7 @@ architecture rtl of framed_addressed_controller is
   type rsp_t is (
     RSP_RESET,
     RSP_IDLE,
+    RSP_DIV,
     RSP_START,
     RSP_SADDR_ACK,
     RSP_ADDR_ACK,
@@ -81,6 +85,7 @@ architecture rtl of framed_addressed_controller is
     cmd             : cmd_t;
     rsp             : rsp_t;
     saddr           : unsigned(7 downto 1);
+    divisor         : unsigned(4 downto 0);
     addr            : nsl_data.bytestream.byte_string(0 to addr_byte_count_c-1);
     cmd_byte_count  : natural range 0 to nsl_math.arith.max(addr_byte_count_c, txn_byte_count_max_c)-1;
     write           : boolean;
@@ -107,6 +112,7 @@ begin
 
   transition: process(r, cmd_i, rsp_i,
                       valid_i, ready_i, saddr_i,
+                      set_divisor_i, divisor_i,
                       addr_i, write_i, wdata_i,
                       data_byte_count_i)
   begin
@@ -118,7 +124,12 @@ begin
 
       when CMD_IDLE =>
         if valid_i = '1' then
-          rin.cmd <= CMD_START;
+          if set_divisor_i = '1' then
+            rin.cmd <= CMD_DIV;
+          else
+            rin.cmd <= CMD_START;
+          end if;
+          rin.divisor <= divisor_i;
           if big_endian_c then
             rin.addr <= to_be(addr_i);
           else
@@ -128,6 +139,11 @@ begin
           rin.saddr <= saddr_i;
           rin.data <= wdata_i;
           rin.data_byte_count <= data_byte_count_i;
+        end if;
+
+      when CMD_DIV =>
+        if cmd_i.ready = '1' then
+          rin.cmd <= CMD_START;
         end if;
 
       when CMD_START =>
@@ -222,9 +238,21 @@ begin
         rin.rsp <= RSP_IDLE;
 
       when RSP_IDLE =>
-        if r.cmd = CMD_START then
+        if r.cmd = CMD_DIV then
+          rin.rsp <= RSP_DIV;
+          rin.error <= false;
+        elsif r.cmd = CMD_START then
           rin.rsp <= RSP_START;
           rin.error <= false;
+        end if;
+
+      when RSP_DIV =>
+        if rsp_i.valid = '1' then
+          rin.rsp <= RSP_START;
+          if rsp_i.last = '1' then
+            rin.error <= true;
+            rin.rsp <= RSP_IDLE;
+          end if;
         end if;
 
       when RSP_START =>
@@ -351,6 +379,11 @@ begin
       when CMD_IDLE =>
         ready_o <= '1';
 
+      when CMD_DIV =>
+        cmd_o.valid <= '1';
+        cmd_o.last <= '0';
+        cmd_o.data <= I2C_CMD_DIV(7 downto 5) & std_ulogic_vector(r.divisor);
+
       when CMD_START | CMD_RESTART =>
         cmd_o.valid <= '1';
         cmd_o.last <= '0';
@@ -414,7 +447,7 @@ begin
       when RSP_RESET | RSP_IDLE =>
         null;
 
-      when RSP_START | RSP_SADDR_ACK | RSP_ADDR_ACK
+      when RSP_DIV | RSP_START | RSP_SADDR_ACK | RSP_ADDR_ACK
         | RSP_DATA_ACK | RSP_RESTART
         | RSP_SADDR_ACK2 | RSP_DATA_GET
         | RSP_STOP =>

@@ -2,7 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library nsl_i2c, nsl_bnoc, nsl_data;
+library nsl_i2c, nsl_bnoc, nsl_data, nsl_math;
 
 -- I2C bys master transactor that takes command stream from a framed interface.
 package transactor is
@@ -18,6 +18,12 @@ package transactor is
   -- CMD: [DIV | n-1]
   -- RSP: [00]
   constant I2C_CMD_DIV       : nsl_bnoc.framed.framed_data_t := "000-----";
+
+  -- Divisor command argument giving the fastest SCL rate not above
+  -- scl_hz, for a transactor running at clock_i_hz.  Divisor 0 runs
+  -- SCL between 500kHz and 1MHz, divisor d divides that by d + 1.
+  -- Saturates at the slowest rate a divisor command can state.
+  function scl_divisor(clock_i_hz, scl_hz: positive) return unsigned;
   -- CMD: [START]
   -- RSP: [00 or ff]
   constant I2C_CMD_START     : nsl_bnoc.framed.framed_data_t := "00100000";
@@ -63,6 +69,12 @@ package transactor is
 
       valid_i : in std_ulogic;
       ready_o : out std_ulogic;
+      -- When set, every transaction starts with a divisor command
+      -- carrying divisor_i, so it runs at its own SCL rate whatever
+      -- the transactor ran before.  Left unset, the transactor rate
+      -- is left untouched.  Pseudo-constant.
+      set_divisor_i : in std_ulogic := '0';
+      divisor_i : in unsigned(4 downto 0) := (others => '0');
       saddr_i : in unsigned(7 downto 1);
       addr_i : in unsigned(8 * addr_byte_count_c - 1 downto 0) := (others => '0');
       write_i : in std_ulogic;
@@ -77,3 +89,18 @@ package transactor is
   end component;
   
 end package transactor;
+
+package body transactor is
+
+  function scl_divisor(clock_i_hz, scl_hz: positive) return unsigned
+  is
+    -- SCL half cycle at divisor 0, as the transactor counts it
+    constant half_cycle_c: positive
+      := 2 ** (nsl_math.arith.log2(clock_i_hz / 1e6) - 1);
+    constant ratio_c: positive
+      := (clock_i_hz + 2 * half_cycle_c * scl_hz - 1) / (2 * half_cycle_c * scl_hz);
+  begin
+    return to_unsigned(nsl_math.arith.min(ratio_c - 1, 31), 5);
+  end function;
+
+end package body transactor;
