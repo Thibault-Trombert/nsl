@@ -19,6 +19,7 @@ entity boundary is
     hd_vsync_o : out std_ulogic;
     hd_d_o : out std_ulogic_vector(15 downto 0);
     hd_scl_io : inout std_logic;
+    hd_int_n_i : in std_ulogic;
     hd_sda_io : inout std_logic;
 
     ld_o : out std_ulogic_vector(0 to 7)
@@ -85,7 +86,7 @@ architecture arch of boundary is
   signal i2c_o_s : nsl_i2c.i2c.i2c_o;
 
   signal index_s, video_s : nsl_video.pixel_stream.bus_t;
-  signal hpd_s, ready_s, synced_s : std_ulogic;
+  signal hpd_s, ready_s, synced_s, irq_n_s : std_ulogic;
 
   signal text_s : string(1 to text_length_c);
   signal colors_s : label_color_vector(0 to colors_c'length-1);
@@ -161,7 +162,17 @@ begin
       rsp_i => rsp_s.ack
       );
 
-  -- Chip interrupt is not routed, the driver polls hot plug state.
+  irq_sync: nsl_clocking.async.async_input
+    generic map(
+      reset_value_c => '1'
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+      data_i => hd_int_n_i,
+      data_o => irq_n_s
+      );
+
   transmitter: nsl_adi.adv7511.adv7511_driver
     generic map(
       clock_i_hz_c => clock_hz_c,
@@ -170,6 +181,7 @@ begin
     port map(
       clock_i => clock_s,
       reset_n_i => reset_n_s,
+      irq_n_i => irq_n_s,
 
       i2c_divisor_i => nsl_i2c.transactor.scl_divisor(clock_hz_c, 400_000),
       cmd_o => cmd_s.req,
