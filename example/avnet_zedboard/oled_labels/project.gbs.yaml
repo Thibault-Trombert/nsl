@@ -1,0 +1,38 @@
+name: zedboard_oled_labels
+
+root:
+  name: top
+  deps:
+    - nsl_solomonsystech.ssd1306
+    - nsl_video.mode
+    - nsl_video.pixel_stream
+    - nsl_video.terminal
+    - nsl_indication.font_6x8
+    - nsl_spi.spi
+    - nsl_clocking.distribution
+    - nsl_clocking.async
+    - nsl_clocking.reset
+    - nsl_time.calendar
+    - nsl_data.text
+  sources:
+    - file_type: vhdl
+      files:
+        - src/boundary.vhd
+    - file_type: xilinx-xdc
+      files:
+        - ../pinout/clk100.xdc
+        - ../pinout/oled.xdc
+        - ../pinout/leds.xdc
+
+output:
+  - name: synthesis
+    topcell: boundary
+    target:
+      part: xc7z020clg484-1
+    outputs:
+      - type: bitstream
+        path: oled_labels.bit
+      - type: vivado-timing-report
+        path: timing.rpt
+      - type: vivado-usage-report
+        path: utilization.rpt
