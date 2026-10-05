@@ -2,6 +2,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+use ieee.math_real.all;
+
 library nsl_amba, nsl_color, nsl_data, nsl_math;
 use nsl_data.bytestream.all;
 use nsl_data.endian.all;
@@ -68,6 +70,49 @@ package pixel_stream is
   constant pixel_zero_c: pixel_t := (others => (others => '0'));
   constant pixel_dontcare_c: pixel_t := (others => (others => '-'));
 
+  -- What the components of a pixel stand for.
+  --
+  -- - INDEXED: one component, an index in a palette that lives
+  --   outside of the stream.  Generators emit this, a palette
+  --   expander turns it into one of the others.
+  -- - RGB: three components, R, G, B.
+  -- - YCBCR444: three components, Y, Cb, Cr.  Chroma is offset
+  --   binary, half scale is no chroma.
+  -- - YCBCR422: two components, Y and a chroma that alternates along
+  --   the line: Cb on even pixels, Cr on odd ones, counted from the
+  --   first pixel of the line.  Lines have an even pixel count.
+  -- - GRAY: one component, luma.  One bit makes black and white.
+  --
+  -- AUTO is only an argument value for config(): it resolves from
+  -- the component count, one component is INDEXED, others are RGB.
+  type colorspace_t is (
+    COLORSPACE_AUTO,
+    COLORSPACE_INDEXED,
+    COLORSPACE_RGB,
+    COLORSPACE_YCBCR444,
+    COLORSPACE_YCBCR422,
+    COLORSPACE_GRAY
+    );
+
+  -- Colorimetry of luma and color difference.  It is informative to
+  -- the stream itself: it states what the components mean, which is
+  -- what a sink reports downstream (e.g. in an HDMI AVI infoframe)
+  -- and what constant colors are computed with.
+  type colorimetry_t is (
+    COLORIMETRY_BT601,
+    COLORIMETRY_BT709
+    );
+
+  -- Code range a component spans.  FULL spans all codes, LIMITED
+  -- spans 16-235 (luma, RGB) and 16-240 (chroma) in eight bits,
+  -- scaled for other widths.  AUTO is only an argument value for
+  -- config(): it resolves to LIMITED for YCbCr, FULL otherwise.
+  type quantization_t is (
+    QUANTIZATION_AUTO,
+    QUANTIZATION_FULL,
+    QUANTIZATION_LIMITED
+    );
+
   -- Pixel layout of a beat, and the AXI4-Stream configuration that
   -- carries it.  The stream configuration is held rather than
   -- derived on use: accessors run in RTL, and deriving there would
@@ -78,6 +123,9 @@ package pixel_stream is
     pixel_count: natural;
     component_count: natural range 1 to max_component_count_c;
     component_bits: natural range 1 to max_component_bits_c;
+    colorspace: colorspace_t;
+    colorimetry: colorimetry_t;
+    quantization: quantization_t;
   end record;
 
   type config_vector is array (natural range <>) of config_t;
@@ -94,14 +142,23 @@ package pixel_stream is
   -- Whether beats may be held back.
   function has_ready(cfg: config_t) return boolean;
 
+  -- Component count a colorspace takes, zero for AUTO.
+  function colorspace_components(colorspace: colorspace_t) return natural;
+
+  -- Components default to what the colorspace takes, and to three
+  -- RGB components when neither is stated.  When both are stated,
+  -- they must agree.
   function config(
     pixels: natural := 1;
-    components: natural range 1 to max_component_count_c := 3;
+    components: natural range 0 to max_component_count_c := 0;
     component_bits: natural range 1 to max_component_bits_c := 8;
     id: natural range 0 to nsl_amba.axi4_stream.max_id_width_c := 0;
     dest: natural range 0 to nsl_amba.axi4_stream.max_dest_width_c := 0;
     keep: boolean := false;
-    ready: boolean := true) return config_t;
+    ready: boolean := true;
+    colorspace: colorspace_t := COLORSPACE_AUTO;
+    colorimetry: colorimetry_t := COLORIMETRY_BT709;
+    quantization: quantization_t := QUANTIZATION_AUTO) return config_t;
 
   function is_valid(cfg: config_t; m: master_t) return boolean;
   function is_ready(cfg: config_t; s: slave_t) return boolean;
@@ -165,6 +222,27 @@ package pixel_stream is
   function to_pixel(cfg: config_t; color: nsl_color.rgb.rgb24) return pixel_t;
   function to_rgb24(cfg: config_t; p: pixel_t) return nsl_color.rgb.rgb24;
 
+  -- YCbCr conversion for YCBCR444 configurations, component
+  -- alignment as for RGB.  Signed chroma of ycbcr24 maps to offset
+  -- binary components.  These are code relabelings for use in logic:
+  -- values are taken as they are, in the quantization of the
+  -- configuration.
+  function to_pixel(cfg: config_t; color: nsl_color.ycbcr.ycbcr24) return pixel_t;
+  function to_ycbcr24(cfg: config_t; p: pixel_t) return nsl_color.ycbcr.ycbcr24;
+
+  -- A constant color, stated in RGB, as the pixel a configuration
+  -- shows it with, following its colorspace, colorimetry and
+  -- quantization.  For YCBCR422, the pixel holds Y, Cb, Cr like
+  -- YCBCR444 would: a 4:2:2 pixel takes one of the two chroma
+  -- components depending on its position, so a color has to state
+  -- both.  An INDEXED configuration has no color to show.
+  --
+  -- This computes on reals: it is meant for constants, not for logic.
+  function color(cfg: config_t; c: nsl_color.rgb.rgb24) return pixel_t;
+
+  -- A palette of constant colors, each converted with color().
+  function palette(cfg: config_t; colors: nsl_color.rgb.rgb24_vector) return pixel_vector;
+
 end package;
 
 package body pixel_stream is
@@ -193,25 +271,68 @@ package body pixel_stream is
     return cfg.stream.has_ready;
   end function;
 
+  function colorspace_components(colorspace: colorspace_t) return natural
+  is
+  begin
+    case colorspace is
+      when COLORSPACE_AUTO => return 0;
+      when COLORSPACE_INDEXED | COLORSPACE_GRAY => return 1;
+      when COLORSPACE_YCBCR422 => return 2;
+      when COLORSPACE_RGB | COLORSPACE_YCBCR444 => return 3;
+    end case;
+  end function;
+
   function config(
     pixels: natural := 1;
-    components: natural range 1 to max_component_count_c := 3;
+    components: natural range 0 to max_component_count_c := 0;
     component_bits: natural range 1 to max_component_bits_c := 8;
     id: natural range 0 to nsl_amba.axi4_stream.max_id_width_c := 0;
     dest: natural range 0 to nsl_amba.axi4_stream.max_dest_width_c := 0;
     keep: boolean := false;
-    ready: boolean := true) return config_t
+    ready: boolean := true;
+    colorspace: colorspace_t := COLORSPACE_AUTO;
+    colorimetry: colorimetry_t := COLORIMETRY_BT709;
+    quantization: quantization_t := QUANTIZATION_AUTO) return config_t
   is
-    constant pixel_bytes_c: natural
-      := components * ((component_bits + 7) / 8);
+    variable components_v: natural range 1 to max_component_count_c;
+    variable colorspace_v: colorspace_t;
+    variable quantization_v: quantization_t;
+    variable pixel_bytes_v: natural;
   begin
-    assert pixels * pixel_bytes_c <= nsl_amba.axi4_stream.max_data_width_c
+    if colorspace /= COLORSPACE_AUTO then
+      assert components = 0 or components = colorspace_components(colorspace)
+        report "Component count does not match colorspace"
+        severity failure;
+      components_v := colorspace_components(colorspace);
+      colorspace_v := colorspace;
+    elsif components = 0 then
+      components_v := 3;
+      colorspace_v := COLORSPACE_RGB;
+    elsif components = 1 then
+      components_v := 1;
+      colorspace_v := COLORSPACE_INDEXED;
+    else
+      components_v := components;
+      colorspace_v := COLORSPACE_RGB;
+    end if;
+
+    if quantization /= QUANTIZATION_AUTO then
+      quantization_v := quantization;
+    elsif colorspace_v = COLORSPACE_YCBCR444 or colorspace_v = COLORSPACE_YCBCR422 then
+      quantization_v := QUANTIZATION_LIMITED;
+    else
+      quantization_v := QUANTIZATION_FULL;
+    end if;
+
+    pixel_bytes_v := components_v * ((component_bits + 7) / 8);
+
+    assert pixels * pixel_bytes_v <= nsl_amba.axi4_stream.max_data_width_c
       report "Beat does not fit in maximum stream data width"
       severity failure;
 
     return config_t'(
       stream => nsl_amba.axi4_stream.config(
-        bytes => pixels * pixel_bytes_c,
+        bytes => pixels * pixel_bytes_v,
         user => user_width_c,
         id => id,
         dest => dest,
@@ -220,8 +341,11 @@ package body pixel_stream is
         ready => ready,
         last => true),
       pixel_count => pixels,
-      component_count => components,
-      component_bits => component_bits);
+      component_count => components_v,
+      component_bits => component_bits,
+      colorspace => colorspace_v,
+      colorimetry => colorimetry,
+      quantization => quantization_v);
   end function;
 
   function is_valid(cfg: config_t; m: master_t) return boolean
@@ -498,6 +622,142 @@ package body pixel_stream is
       end case;
     end loop;
 
+    return ret;
+  end function;
+
+  function component_from_byte(cfg: config_t; v: unsigned(7 downto 0)) return component_t
+  is
+    variable w: unsigned(max_component_bits_c+7 downto 0);
+  begin
+    w := resize(v, w'length);
+    if cfg.component_bits >= 8 then
+      return resize(shift_left(w, cfg.component_bits - 8), max_component_bits_c);
+    else
+      return resize(shift_right(w, 8 - cfg.component_bits), max_component_bits_c);
+    end if;
+  end function;
+
+  function component_to_byte(cfg: config_t; v: component_t) return unsigned
+  is
+  begin
+    if cfg.component_bits >= 8 then
+      return resize(shift_right(v, cfg.component_bits - 8), 8);
+    else
+      return resize(shift_left(v, 8 - cfg.component_bits), 8);
+    end if;
+  end function;
+
+  function to_pixel(cfg: config_t; color: nsl_color.ycbcr.ycbcr24) return pixel_t
+  is
+    variable ret: pixel_t := pixel_zero_c;
+  begin
+    assert cfg.colorspace = COLORSPACE_YCBCR444
+      report "YCbCr conversion needs a YCbCr 4:4:4 configuration"
+      severity failure;
+
+    ret(0) := component_from_byte(cfg, color.y);
+    ret(1) := component_from_byte(cfg, unsigned(color.cb) xor x"80");
+    ret(2) := component_from_byte(cfg, unsigned(color.cr) xor x"80");
+    return ret;
+  end function;
+
+  function to_ycbcr24(cfg: config_t; p: pixel_t) return nsl_color.ycbcr.ycbcr24
+  is
+    variable ret: nsl_color.ycbcr.ycbcr24;
+  begin
+    assert cfg.colorspace = COLORSPACE_YCBCR444
+      report "YCbCr conversion needs a YCbCr 4:4:4 configuration"
+      severity failure;
+
+    ret.y := component_to_byte(cfg, p(0));
+    ret.cb := signed(component_to_byte(cfg, p(1)) xor x"80");
+    ret.cr := signed(component_to_byte(cfg, p(2)) xor x"80");
+    return ret;
+  end function;
+
+  function color(cfg: config_t; c: nsl_color.rgb.rgb24) return pixel_t
+  is
+    constant n: natural := cfg.component_bits;
+    constant code_max: real := 2.0 ** n - 1.0;
+    constant code_scale: real := 2.0 ** n / 256.0;
+    variable r, g, b, y, cb, cr, kr, kb: real;
+    variable ret: pixel_t := pixel_zero_c;
+
+    -- Luma or RGB component, v in [0, 1]
+    function luma_code(v: real) return component_t is
+      variable code: real;
+    begin
+      if cfg.quantization = QUANTIZATION_LIMITED then
+        code := (16.0 + 219.0 * v) * code_scale;
+      else
+        code := v * code_max;
+      end if;
+      return to_unsigned(integer(realmax(0.0, realmin(code_max, round(code)))),
+                         max_component_bits_c);
+    end function;
+
+    -- Color difference component, v in [-0.5, 0.5]
+    function chroma_code(v: real) return component_t is
+      variable code: real;
+    begin
+      if cfg.quantization = QUANTIZATION_LIMITED then
+        code := (128.0 + 224.0 * v) * code_scale;
+      else
+        code := 2.0 ** (n - 1) + v * code_max;
+      end if;
+      return to_unsigned(integer(realmax(0.0, realmin(code_max, round(code)))),
+                         max_component_bits_c);
+    end function;
+  begin
+    r := real(to_integer(c.r)) / 255.0;
+    g := real(to_integer(c.g)) / 255.0;
+    b := real(to_integer(c.b)) / 255.0;
+
+    case cfg.colorimetry is
+      when COLORIMETRY_BT601 =>
+        kr := 0.299;
+        kb := 0.114;
+      when COLORIMETRY_BT709 =>
+        kr := 0.2126;
+        kb := 0.0722;
+    end case;
+
+    y := kr * r + (1.0 - kr - kb) * g + kb * b;
+    cb := (b - y) / (2.0 * (1.0 - kb));
+    cr := (r - y) / (2.0 * (1.0 - kr));
+
+    case cfg.colorspace is
+      when COLORSPACE_RGB =>
+        ret(0) := luma_code(r);
+        ret(1) := luma_code(g);
+        ret(2) := luma_code(b);
+
+      when COLORSPACE_YCBCR444 | COLORSPACE_YCBCR422 =>
+        ret(0) := luma_code(y);
+        ret(1) := chroma_code(cb);
+        ret(2) := chroma_code(cr);
+
+      when COLORSPACE_GRAY =>
+        ret(0) := luma_code(y);
+
+      when COLORSPACE_INDEXED | COLORSPACE_AUTO =>
+        assert false
+          report "An indexed configuration has no color to show"
+          severity failure;
+    end case;
+
+    return ret;
+  end function;
+
+  function palette(cfg: config_t; colors: nsl_color.rgb.rgb24_vector) return pixel_vector
+  is
+    alias xcolors: nsl_color.rgb.rgb24_vector(0 to colors'length-1) is colors;
+    variable ret: pixel_vector(0 to colors'length-1);
+  begin
+    for i in ret'range
+    loop
+      ret(i) := color(cfg, xcolors(i));
+    end loop;
     return ret;
   end function;
 
