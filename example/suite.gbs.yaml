@@ -73,6 +73,9 @@ projects:
   - name: zedboard_oled_labels
     path: avnet_zedboard/oled_labels
     tags: [vivado, zedboard]
+  - name: zedboard_hdmi_labels
+    path: avnet_zedboard/hdmi_labels
+    tags: [vivado, zedboard]
 
   - name: rgb2ws2812_spartan6
     path: rgb2ws2812/spartan-6

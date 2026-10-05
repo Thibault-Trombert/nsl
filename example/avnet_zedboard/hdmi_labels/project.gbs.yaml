@@ -1,0 +1,42 @@
+name: zedboard_hdmi_labels
+
+root:
+  name: top
+  deps:
+    - nsl_adi.adv7511
+    - nsl_i2c.i2c
+    - nsl_i2c.transactor
+    - nsl_bnoc.framed
+    - nsl_video.mode
+    - nsl_video.pixel_stream
+    - nsl_video.terminal
+    - nsl_video.colormap
+    - nsl_indication.font_6x8
+    - nsl_color.rgb
+    - nsl_clocking.pll
+    - nsl_clocking.distribution
+    - nsl_clocking.async
+    - nsl_clocking.reset
+    - nsl_data.text
+  sources:
+    - file_type: vhdl
+      files:
+        - src/boundary.vhd
+    - file_type: xilinx-xdc
+      files:
+        - ../pinout/clk100.xdc
+        - ../pinout/hdmi.xdc
+        - ../pinout/leds.xdc
+
+output:
+  - name: synthesis
+    topcell: boundary
+    target:
+      part: xc7z020clg484-1
+    outputs:
+      - type: bitstream
+        path: hdmi_labels.bit
+      - type: vivado-timing-report
+        path: timing.rpt
+      - type: vivado-usage-report
+        path: utilization.rpt
