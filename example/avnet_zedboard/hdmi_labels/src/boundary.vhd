@@ -28,11 +28,11 @@ end boundary;
 architecture arch of boundary is
 
   constant clock_hz_c : natural := 100_000_000;
-  constant mode_c : mode_t := mode_std_1280x720p60_c;
+  constant mode_c : mode_t := mode_std_1280x1024p60_c;
   constant pixel_hz_c : natural := pixel_clock_hz(mode_c);
 
-  -- 74.25MHz is not reachable exactly from the board crystal, sinks
-  -- tolerate far more than this offset.
+  -- Pixel clock tolerance covers modes not reachable exactly from the
+  -- board crystal, sinks tolerate far more than this offset.
   constant pll_config_c : nsl_clocking.pll.pll_config_t
     := nsl_clocking.pll.pll_config(
       input_hz => clock_hz_c,
@@ -59,11 +59,11 @@ architecture arch of boundary is
   constant palette_c : nsl_video.pixel_stream.pixel_vector(colors_c'range)
     := nsl_video.pixel_stream.palette(video_config_c, colors_c);
 
-  -- 6x8 font scaled 4 times: 24x32 cells, 53 columns and 22 rows on
-  -- screen.  Grid is 64x32, cropped to the screen.
+  -- 6x8 font scaled 4 times: 24x32 cells, 53 columns and 32 rows on
+  -- screen.  Grid is 64x32, cropped to the screen width.
   constant labels_c : label_vector(0 to 9) := (
     text_label(1, 2, 23, color_white_c, color_black_c),
-    text_label(3, 2, 23, color_cyan_c, color_black_c),
+    text_label(3, 2, 24, color_cyan_c, color_black_c),
     text_label(6, 2, 7, color_red_c, color_black_c),
     text_label(7, 2, 7, color_green_c, color_black_c),
     text_label(8, 2, 7, color_blue_c, color_black_c),
@@ -71,7 +71,7 @@ architecture arch of boundary is
     text_label(10, 2, 7, color_magenta_c, color_black_c),
     text_label(12, 2, 7, color_black_c, color_white_c),
     text_label(12, 10, 8, color_white_c, color_black_c),
-    text_label(20, 46, 6, color_white_c, color_black_c)
+    text_label(31, 47, 6, color_white_c, color_black_c)
     );
 
   constant text_length_c : natural := labels_text_length(labels_c);
@@ -176,8 +176,9 @@ begin
       rsp_i => rsp_s.req,
       rsp_o => rsp_s.ack,
 
-      aspect_i => nsl_adi.adv7511.ASPECT_16_9,
-      hdmi_i => '1',
+      -- DVI sink
+      aspect_i => nsl_adi.adv7511.ASPECT_4_3,
+      hdmi_i => '0',
 
       hpd_o => hpd_s,
       ready_o => ready_s,
@@ -270,7 +271,7 @@ begin
   end process;
 
   text_s <= "NSL ADV7511 ON ZEDBOARD"
-            & "1280X720P60 YCBCR 4:2:2"
+            & "1280X1024P60 YCBCR 4:2:2"
             & "RED    "
             & "GREEN  "
             & "BLUE   "
