@@ -171,6 +171,7 @@ begin
       clock_i => clock_s,
       reset_n_i => reset_n_s,
 
+      i2c_divisor_i => nsl_i2c.transactor.scl_divisor(clock_hz_c, 400_000),
       cmd_o => cmd_s.req,
       cmd_i => cmd_s.ack,
       rsp_i => rsp_s.req,
