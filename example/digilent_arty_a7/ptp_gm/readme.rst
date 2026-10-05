@@ -51,7 +51,8 @@ Architecture
         discipline_clock_driver -> increment (dac_discipline_c false)
         discipline_dac_driver -> MCP4726 -> VCXO (default)
       UART 9600 -> ubx_nav_timegps -> discipline_second_setter
-      screen_text -> terminal_labels -> pmod_oled_rgb_driver on JA
+      screen_text -> terminal_labels_colormap -> palette_expander
+        -> pmod_oled_rgb_driver on JA
       pps_ticker -> PPS_OUT SMA and GPS EXTINT (self-measurement)
       AUX SMA -> discipline_pps_source, measurement only -> panel
   100 MHz board clock: MII driver + shims, mac + ethernet,
@@ -76,9 +77,11 @@ Status screen
 =============
 
 A Pmod OLEDrgb (SSD1331, 96x64) on JA shows the grandmaster status as
-a 16x8 text screen, rendered by ``nsl_video.terminal.terminal_labels``
-from ``src/func/screen_text.vhd`` in the stack domain, every value
-having already crossed for the panel::
+a 16x8 text screen, rendered by
+``nsl_video.terminal.terminal_labels_colormap`` and
+``nsl_video.colormap.palette_expander`` from
+``src/func/screen_text.vhd`` in the stack domain, every value having
+already crossed for the panel::
 
   # LNK^ GPS* PPS*     a heart blinking on the local second, the link
                        as an up or down arrow, the GPS lock and the

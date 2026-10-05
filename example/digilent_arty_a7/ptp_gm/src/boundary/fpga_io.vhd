@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 
 library nsl_amba, nsl_mii, nsl_clocking, nsl_smi, nsl_i2c,
   nsl_io, nsl_time, nsl_digilent, nsl_indication, nsl_color,
-  gatecap_generated, work, nsl_video, nsl_solomonsystech;
+  gatecap_generated, work, nsl_video, nsl_solomonsystech, nsl_math;
 use nsl_amba.axi4_stream.all;
 use nsl_mii.flit.all;
 use nsl_time.discipline.all;
@@ -131,6 +131,15 @@ architecture beh of fpga_io is
     := nsl_video.pixel_stream.config(pixels => 1);
 
   signal pixel_s : nsl_video.pixel_stream.bus_t;
+
+  constant index_config_c : nsl_video.pixel_stream.config_t
+    := nsl_video.pixel_stream.config(pixels => 1,
+                                     component_bits => nsl_math.arith.log2(color_palette_c'length),
+                                     colorspace => nsl_video.pixel_stream.COLORSPACE_INDEXED);
+  constant pixel_palette_c : nsl_video.pixel_stream.pixel_vector(0 to color_palette_c'length-1)
+    := nsl_video.pixel_stream.palette(pixel_config_c, color_palette_c);
+  signal index_s : nsl_video.pixel_stream.bus_t;
+
   signal synced_s : std_ulogic;
   signal screen_text_s : string(1 to work.func.screen_text_length_c);
   signal screen_colors_s : nsl_video.terminal.label_color_vector(0 to work.func.screen_color_count_c-1);
@@ -469,16 +478,16 @@ begin
       pmod_io => ja_io
       );
 
-  terminal: nsl_video.terminal.terminal_labels
+  terminal: nsl_video.terminal.terminal_labels_colormap
     generic map(
       row_count_l2_c => 3,
       column_count_l2_c => 4,
       character_count_l2_c => 8,
-      color_palette_c => color_palette_c,
+      color_count_l2_c => index_config_c.component_bits,
       font_c => nsl_indication.font_6x8.font_6x8_c,
       labels_c => work.func.screen_labels_c,
       blank_color_c => work.func.screen_color_background_c,
-      config_c => pixel_config_c,
+      config_c => index_config_c,
       geometry_c => geometry_c
       )
     port map(
@@ -486,11 +495,29 @@ begin
       reset_n_i => reset_n_s,
 
       enable_i => '1',
-      out_o => pixel_s.m,
-      out_i => pixel_s.s,
+      out_o => index_s.m,
+      out_i => index_s.s,
 
       text_i => screen_text_s,
       color_i => screen_colors_s
+      );
+
+  terminal_palette: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => pixel_config_c
+      )
+    port map(
+      clock_i => clock_100_s,
+      reset_n_i => reset_n_s,
+
+      palette_i => pixel_palette_c,
+
+      in_i => index_s.m,
+      in_o => index_s.s,
+
+      out_o => pixel_s.m,
+      out_i => pixel_s.s
       );
 
   screen: work.func.screen_text
