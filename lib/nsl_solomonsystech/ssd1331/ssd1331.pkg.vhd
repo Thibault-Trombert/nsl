@@ -136,6 +136,9 @@ package ssd1331 is
   -- pixels from there; synced_o states whether it holds.  A stream
   -- with no pixel ready holds the serial interface mid-frame rather
   -- than losing the pixel.
+  --
+  -- Stream must be RGB, elaboration fails otherwise.  An indexed
+  -- source goes through nsl_video.colormap.palette_expander first.
   component ssd1331_spi_driver is
     generic(
       clock_i_hz_c : natural;

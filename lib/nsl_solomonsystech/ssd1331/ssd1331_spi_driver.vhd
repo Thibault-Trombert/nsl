@@ -2,9 +2,10 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library work, nsl_spi, nsl_data, nsl_color, nsl_video;
+library work, nsl_spi, nsl_data, nsl_color, nsl_video, nsl_synthesis;
 use work.ssd1331.all;
 use nsl_data.bytestream.all;
+use nsl_video.pixel_stream.all;
 
 entity ssd1331_spi_driver is
   generic(
@@ -96,6 +97,15 @@ architecture beh of ssd1331_spi_driver is
   signal pixel_s: nsl_color.rgb.rgb24;
 
 begin
+
+  rgb_check: nsl_synthesis.assertion.synth_assert
+    generic map(
+      message_c => "Driver takes an RGB stream",
+      condition_c => config_c.colorspace = COLORSPACE_RGB
+      )
+    port map(
+      unused_i => '0'
+      );
 
   regs: process(clock_i, reset_n_i) is
   begin
