@@ -5,3 +5,4 @@ deps += nsl_spi.spi
 deps += nsl_data.bytestream
 deps += nsl_video.pixel_stream
 deps += nsl_video.raster
+deps += nsl_synthesis.assertion

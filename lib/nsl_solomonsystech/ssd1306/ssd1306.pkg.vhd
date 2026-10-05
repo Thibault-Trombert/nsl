@@ -103,10 +103,11 @@ package ssd1306 is
   -- with no pixel ready holds the serial interface rather than losing
   -- the pixel.
   --
-  -- Stream is expected to have one component per pixel.  Pixel is lit
-  -- when the most significant bit of its component is set, which
-  -- makes a one-bit color index stream (e.g. from a colormap
-  -- generator with color_count_l2_c = 1) the natural source.
+  -- Stream must be GRAY, elaboration fails otherwise.  Pixel is lit
+  -- when the most significant bit of its gray component is set, a
+  -- one-bit GRAY stream is the natural source.  An indexed source
+  -- goes through nsl_video.colormap.palette_expander first, with a
+  -- palette computed by nsl_video.pixel_stream.palette().
   --
   -- Panel memory takes eight lines at once, so the driver takes eight
   -- lines from the stream into an internal buffer, then sends them

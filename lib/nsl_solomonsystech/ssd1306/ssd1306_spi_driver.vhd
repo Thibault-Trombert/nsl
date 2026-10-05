@@ -2,9 +2,10 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library work, nsl_spi, nsl_data, nsl_video;
+library work, nsl_spi, nsl_data, nsl_video, nsl_synthesis;
 use work.ssd1306.all;
 use nsl_data.bytestream.all;
+use nsl_video.pixel_stream.all;
 
 entity ssd1306_spi_driver is
   generic(
@@ -132,9 +133,14 @@ begin
     report "Panel columns do not fit in controller"
     severity failure;
 
-  assert config_c.component_count = 1
-    report "Driver takes one component per pixel"
-    severity failure;
+  gray_check: nsl_synthesis.assertion.synth_assert
+    generic map(
+      message_c => "Driver takes a GRAY stream",
+      condition_c => config_c.colorspace = COLORSPACE_GRAY
+      )
+    port map(
+      unused_i => '0'
+      );
 
   regs: process(clock_i, reset_n_i) is
   begin

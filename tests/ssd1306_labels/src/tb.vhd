@@ -3,7 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library nsl_solomonsystech, nsl_video, nsl_indication, nsl_spi,
-  nsl_data, nsl_simulation;
+  nsl_data, nsl_simulation, nsl_color;
 use nsl_solomonsystech.ssd1306.all;
 use nsl_video.pixel_stream.all;
 use nsl_video.terminal.all;
@@ -12,10 +12,11 @@ use nsl_data.text.all;
 use nsl_indication.font.all;
 use nsl_indication.font_6x8.all;
 
--- Renders a label screen as a one-bit color index stream into the
--- SSD1306 driver for a 128x32 panel, and checks every byte sent to
--- the panel against a reference image computed from the font.  Grid
--- is wider than the panel, the frame is cropped to the panel width.
+-- Renders a label screen as a one-bit color index stream, expands it
+-- to a one-bit gray stream into the SSD1306 driver for a 128x32
+-- panel, and checks every byte sent to the panel against a reference
+-- image computed from the font.  Grid is wider than the panel, the
+-- frame is cropped to the panel width.
 entity tb is
 end entity;
 
@@ -91,9 +92,15 @@ architecture sim of tb is
                      rotate_180 => false,
                      contrast => x"8f");
 
-  constant config_c : config_t := config(pixels => 1,
-                                         components => 1,
-                                         component_bits => 1);
+  constant index_config_c : config_t := config(pixels => 1,
+                                               components => 1,
+                                               component_bits => 1);
+  constant gray_config_c : config_t := config(pixels => 1,
+                                              colorspace => COLORSPACE_GRAY,
+                                              component_bits => 1);
+  constant palette_c : pixel_vector(0 to 1)
+    := palette(gray_config_c, (color_off_c => nsl_color.rgb.rgb24_black,
+                               color_on_c => nsl_color.rgb.rgb24_white));
 
   signal clock_s : std_ulogic := '0';
   signal reset_n_s : std_ulogic;
@@ -101,7 +108,7 @@ architecture sim of tb is
   signal spi_s : nsl_spi.spi.spi_slave_i;
   signal dc_s, panel_reset_n_s, vcc_en_s, power_en_s : std_ulogic;
 
-  signal pixel_s : bus_t;
+  signal index_s, pixel_s : bus_t;
   signal synced_s : std_ulogic;
 
   signal colors_s : label_color_vector(0 to 1);
@@ -123,7 +130,7 @@ begin
   dut: nsl_solomonsystech.ssd1306.ssd1306_spi_driver
     generic map(
       clock_i_hz_c => clock_hz_c,
-      config_c => config_c,
+      config_c => gray_config_c,
       spi_hz_c => spi_hz_c,
       width_c => width_c,
       height_c => height_c,
@@ -148,6 +155,24 @@ begin
   colors_s(color_off_c) <= x"00";
   colors_s(color_on_c) <= x"01";
 
+  expander: nsl_video.colormap.palette_expander
+    generic map(
+      in_config_c => index_config_c,
+      out_config_c => gray_config_c
+      )
+    port map(
+      clock_i => clock_s,
+      reset_n_i => reset_n_s,
+
+      palette_i => palette_c,
+
+      in_i => index_s.m,
+      in_o => index_s.s,
+
+      out_o => pixel_s.m,
+      out_i => pixel_s.s
+      );
+
   terminal: nsl_video.terminal.terminal_labels_colormap
     generic map(
       row_count_l2_c => 2,
@@ -157,15 +182,15 @@ begin
       font_c => font_6x8_c,
       labels_c => labels_c,
       blank_color_c => color_off_c,
-      config_c => config_c,
+      config_c => index_config_c,
       geometry_c => nsl_video.mode.geometry(width_c, height_c)
       )
     port map(
       clock_i => clock_s,
       reset_n_i => reset_n_s,
 
-      out_o => pixel_s.m,
-      out_i => pixel_s.s,
+      out_o => index_s.m,
+      out_i => index_s.s,
 
       text_i => text_c,
       color_i => colors_s

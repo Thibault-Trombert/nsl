@@ -6,6 +6,8 @@ root:
     - nsl_solomonsystech.ssd1306
     - nsl_video.terminal
     - nsl_video.pixel_stream
+    - nsl_video.colormap
+    - nsl_color.rgb
     - nsl_video.mode
     - nsl_indication.font
     - nsl_indication.font_6x8
