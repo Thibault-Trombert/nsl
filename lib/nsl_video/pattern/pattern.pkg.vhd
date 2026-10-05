@@ -54,10 +54,13 @@ package pattern is
       );
   end component;
 
-  -- Eight bars of full-scale RGB.
+  -- Eight bars of RGB, color_bars_palette_c in order.
   --
   -- Bars restart on every line, so the first one is a whole bar wide
   -- whatever the line width is.
+  --
+  -- Deprecated: use color_bars and nsl_video.colormap.palette_expander
+  -- with a palette computed from color_bars_palette_c.
   component rgb_color_bars is
     generic(
       geometry_c : nsl_video.mode.geometry_t;
@@ -75,9 +78,14 @@ package pattern is
       );
   end component;
 
-  -- The same bars, stated in YCbCr.  The stream carries luma first, as
-  -- the colourspace names it, which is the order
-  -- nsl_dvi.encoder.channel_map_ycbcr_c expects.
+  -- The same bars, stated in YCbCr, white bar first.  The stream
+  -- carries luma first, as the colourspace names it, which is the
+  -- order nsl_dvi.encoder.channel_map_ycbcr_c expects.  Unless
+  -- config_c states a YCbCr colorspace, bars are BT.709 limited
+  -- range, chroma in offset binary, laid out as config_c says.
+  --
+  -- Deprecated: use color_bars and nsl_video.colormap.palette_expander
+  -- with a palette computed from color_bars_palette_c.
   component ycbcr_color_bars is
     generic(
       geometry_c : nsl_video.mode.geometry_t;
