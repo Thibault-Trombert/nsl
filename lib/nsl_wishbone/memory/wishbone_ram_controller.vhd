@@ -54,10 +54,14 @@ begin
   begin
     rin <= r;
 
-    rin.was_accessed <= wbc_is_active(wb_config_c, wb_i);
+    if wb_config_c.bus_type = WB_CLASSIC_PIPELINED then
+      rin.was_accessed <= wbc_is_active(wb_config_c, wb_i);
+    else
+      rin.was_accessed <= wbc_is_active(wb_config_c, wb_i) and not r.was_accessed;
+    end if;
   end process;
   
-  outputs: process(r, read_data_i, wb_i) is
+  outputs: process(r, read_data_i) is
     variable rdata: std_ulogic_vector(wb_data_width(wb_config_c)-1 downto 0);
   begin
     wb_o <= wbc_ack(wb_config_c, term => WB_TERM_NONE);
@@ -70,8 +74,6 @@ begin
       end if;
 
       wb_o <= wbc_ack(wb_config_c, data => rdata, term => WB_TERM_ACK);
-    elsif wb_config_c.bus_type = WB_CLASSIC_PIPELINED and wbc_is_read(wb_config_c, wb_i) then
-      wb_o <= wbc_ack(wb_config_c, stall => true);
     end if;
   end process;      
   

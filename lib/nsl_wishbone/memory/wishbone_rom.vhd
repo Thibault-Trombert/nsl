@@ -61,8 +61,12 @@ begin
   begin
     rin <= r;
 
-    rin.was_accessed <= wbc_is_read(wb_config_c, wb_i) or wbc_is_write(wb_config_c, wb_i);
+    rin.was_accessed <= wbc_is_active(wb_config_c, wb_i);
     rin.was_error <= wbc_is_write(wb_config_c, wb_i);
+
+    if wb_config_c.bus_type /= WB_CLASSIC_PIPELINED and r.was_accessed then
+      rin.was_accessed <= false;
+    end if;
   end process;
 
   outputs: process(r, rom_rdata_s) is
