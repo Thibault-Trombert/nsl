@@ -62,17 +62,17 @@ architecture beh of axi4_stream_async_packet_drop_fifo_ip_top is
   attribute X_INTERFACE_INFO of out_clock_i : signal is "xilinx.com:signal:clock:1.0 out_clock_i CLK";
   attribute X_INTERFACE_INFO of reset_n_i : signal is "xilinx.com:signal:reset:1.0 reset_n_i RST";
   attribute X_INTERFACE_PARAMETER of reset_n_i : signal is "POLARITY ACTIVE_LOW";
-  attribute X_INTERFACE_PARAMETER of in_clock_i : signal is "ASSOCIATED_BUSIF in, ASSOCIATED_RESET reset_n_i";
-  attribute X_INTERFACE_PARAMETER of out_clock_i : signal is "ASSOCIATED_BUSIF out, ASSOCIATED_RESET reset_n_i";
+  attribute X_INTERFACE_PARAMETER of in_clock_i : signal is "ASSOCIATED_BUSIF in_i, ASSOCIATED_RESET reset_n_i";
+  attribute X_INTERFACE_PARAMETER of out_clock_i : signal is "ASSOCIATED_BUSIF out_o, ASSOCIATED_RESET reset_n_i";
 
-  attribute X_INTERFACE_INFO of in_tdata : signal is "xilinx.com:interface:axis:1.0 in TDATA";
-  attribute X_INTERFACE_INFO of in_tvalid : signal is "xilinx.com:interface:axis:1.0 in TVALID";
-  attribute X_INTERFACE_INFO of in_tlast : signal is "xilinx.com:interface:axis:1.0 in TLAST";
-  attribute X_INTERFACE_INFO of in_tready : signal is "xilinx.com:interface:axis:1.0 in TREADY";
-  attribute X_INTERFACE_INFO of out_tdata : signal is "xilinx.com:interface:axis:1.0 out TDATA";
-  attribute X_INTERFACE_INFO of out_tvalid : signal is "xilinx.com:interface:axis:1.0 out TVALID";
-  attribute X_INTERFACE_INFO of out_tlast : signal is "xilinx.com:interface:axis:1.0 out TLAST";
-  attribute X_INTERFACE_INFO of out_tready : signal is "xilinx.com:interface:axis:1.0 out TREADY";
+  attribute X_INTERFACE_INFO of in_tdata : signal is "xilinx.com:interface:axis:1.0 in_i TDATA";
+  attribute X_INTERFACE_INFO of in_tvalid : signal is "xilinx.com:interface:axis:1.0 in_i TVALID";
+  attribute X_INTERFACE_INFO of in_tlast : signal is "xilinx.com:interface:axis:1.0 in_i TLAST";
+  attribute X_INTERFACE_INFO of in_tready : signal is "xilinx.com:interface:axis:1.0 in_i TREADY";
+  attribute X_INTERFACE_INFO of out_tdata : signal is "xilinx.com:interface:axis:1.0 out_o TDATA";
+  attribute X_INTERFACE_INFO of out_tvalid : signal is "xilinx.com:interface:axis:1.0 out_o TVALID";
+  attribute X_INTERFACE_INFO of out_tlast : signal is "xilinx.com:interface:axis:1.0 out_o TLAST";
+  attribute X_INTERFACE_INFO of out_tready : signal is "xilinx.com:interface:axis:1.0 out_o TREADY";
 
   constant cfg_c : nsl_amba.axi4_stream.config_t
     := nsl_amba.axi4_stream.config(bytes => data_byte_count_c, last => true);
