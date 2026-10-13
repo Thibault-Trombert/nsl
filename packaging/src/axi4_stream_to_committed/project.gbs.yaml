@@ -1,0 +1,33 @@
+name: axi4_stream_to_committed
+
+root:
+  name: top
+  sources:
+    - file_type: vhdl
+      files:
+        - axi4_stream_to_committed_ip_top.vhd
+  deps:
+    - nsl_bnoc.axi_adapter
+    - nsl_amba.packer
+
+output:
+  - name: ip_package
+    topcell: axi4_stream_to_committed_ip_top
+    target:
+      part: xc7z020clg400-1
+    backend_config:
+      gbs.builtin.vivado-ip:
+        tool: vivado
+        vendor: nsl
+        library: bnoc
+        name: axi4_stream_to_committed
+        version: "1.0"
+        taxonomy: /BNOC/Committed
+        display_name: AXI4-Stream to Committed
+        description: Converts AXI4-Stream to a committed (validated packet) bus
+        supported_families:
+          - zynq
+          - artix7
+    outputs:
+      - type: vivado-ip-zip
+        path: axi4_stream_to_committed_1.0.zip

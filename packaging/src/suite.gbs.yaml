@@ -68,6 +68,9 @@ projects:
   - name: axi4_stream_async_packet_drop_fifo
     path: axi4_stream_async_packet_drop_fifo
     tags: [vivado-ip]
+  - name: axi4_stream_to_committed
+    path: axi4_stream_to_committed
+    tags: [vivado-ip]
   - name: framed_i2c_controller
     path: framed_i2c_controller
     tags: [vivado-ip]
