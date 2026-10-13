@@ -71,6 +71,9 @@ projects:
   - name: axi4_stream_to_committed
     path: axi4_stream_to_committed
     tags: [vivado-ip]
+  - name: committed_to_axi4_stream
+    path: committed_to_axi4_stream
+    tags: [vivado-ip]
   - name: framed_i2c_controller
     path: framed_i2c_controller
     tags: [vivado-ip]
