@@ -1,0 +1,36 @@
+name: gmii_z7_phy_axi
+
+root:
+  name: top
+  sources:
+    - file_type: vhdl
+      files:
+        - gmii_z7_phy_axi_ip_top.vhd
+  deps:
+    - nsl_amba.axi4_stream
+    - nsl_amba.packer
+    - nsl_mii.flit
+    - nsl_mii.gmii
+    - nsl_mii.gmii_axi
+
+output:
+  - name: ip_package
+    topcell: gmii_z7_phy_axi_ip_top
+    target:
+      part: xc7z020clg400-1
+    backend_config:
+      gbs.builtin.vivado-ip:
+        tool: vivado
+        vendor: nsl
+        library: mii
+        name: gmii_z7_phy_axi
+        version: "1.0"
+        taxonomy: /NSL/Mii
+        display_name: GMII Zynq-7 Phy (AXI4-Stream, TUSER status)
+        description: Pseudo GMII phy for the Zynq-7 hard GbE controller, exposing layer-1 frames as AXI4-Stream with the frame status in TUSER(0) of the TLAST beat
+        supported_families:
+          - zynq
+          - artix7
+    outputs:
+      - type: vivado-ip-zip
+        path: gmii_z7_phy_axi_1.0.zip

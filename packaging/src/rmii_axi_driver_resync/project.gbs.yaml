@@ -1,0 +1,33 @@
+name: rmii_axi_driver_resync
+
+root:
+  name: top
+  sources:
+    - file_type: vhdl
+      files:
+        - rmii_axi_driver_resync_ip_top.vhd
+  deps:
+    - nsl_mii.rmii
+    - nsl_amba.packer
+
+output:
+  - name: ip_package
+    topcell: rmii_axi_driver_resync_ip_top
+    target:
+      part: xc7z020clg400-1
+    backend_config:
+      gbs.builtin.vivado-ip:
+        tool: vivado
+        vendor: nsl
+        library: mii
+        name: rmii_axi_driver_resync
+        version: "1.0"
+        taxonomy: /NSL/Mii
+        display_name: RMII Driver (AXI4-Stream, clock-resynced)
+        description: 10/100 RMII MAC-side driver, AXI4-Stream data path, own reference-clock domain
+        supported_families:
+          - zynq
+          - artix7
+    outputs:
+      - type: vivado-ip-zip
+        path: rmii_axi_driver_resync_1.0.zip

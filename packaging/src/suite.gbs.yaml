@@ -89,6 +89,9 @@ projects:
   - name: gmii_z7_phy
     path: gmii_z7_phy
     tags: [vivado-ip]
+  - name: gmii_z7_phy_axi
+    path: gmii_z7_phy_axi
+    tags: [vivado-ip]
   - name: i2c_input_deglitcher
     path: i2c_input_deglitcher
     tags: [vivado-ip]
@@ -100,6 +103,9 @@ projects:
     tags: [vivado-ip]
   - name: ps_gpio_adapter
     path: ps_gpio_adapter
+    tags: [vivado-ip]
+  - name: rmii_axi_driver_resync
+    path: rmii_axi_driver_resync
     tags: [vivado-ip]
   - name: routed_endpoint
     path: routed_endpoint
