@@ -4,6 +4,7 @@ packages += link_monitor
 packages += mii
 packages += rmii
 packages += gmii
+packages += gmii_axi
 packages += rgmii
 packages += timestamping
 packages += testing
